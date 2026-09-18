@@ -22,6 +22,15 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Use fixed debug key
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_B64" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+          fi
+
       - name: Build
         run: ./gradlew :mobile:assembleFossBetaDebug
 
