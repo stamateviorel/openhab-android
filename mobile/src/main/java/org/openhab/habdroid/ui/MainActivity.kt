@@ -1100,6 +1100,15 @@ class MainActivity : AbstractBaseActivity() {
                 }
             }
             if (item.groupId == R.id.servers) {
+                if (item.itemId != prefs.getActiveServerId()) {
+                    // Executed once the properties of the new server are loaded
+                    pendingAction = when (prefs.getStringOrNull(PrefKeys.START_PAGE)) {
+                        ACTION_HABPANEL_SELECTED -> PendingAction.OpenWebViewUi(WebViewUi.HABPANEL, item.itemId, null)
+                        ACTION_MAIN_UI_SELECTED -> PendingAction.OpenWebViewUi(WebViewUi.MAIN_UI, item.itemId, null)
+                        ACTION_FRONTAIL_SELECTED -> PendingAction.OpenWebViewUi(WebViewUi.FRONTAIL, item.itemId, null)
+                        else -> null
+                    }
+                }
                 prefs.edit {
                     putActiveServerId(item.itemId)
                 }
