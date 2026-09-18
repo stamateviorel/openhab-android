@@ -26,13 +26,23 @@ jobs:
         env:
           DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
         run: |
+          env | grep -E '^(ANDROID|HOME=)' | sort
           if [ -n "$DEBUG_KEYSTORE_B64" ]; then
-            mkdir -p ~/.android
-            echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            for dir in "$HOME/.android" "$ANDROID_USER_HOME" "${ANDROID_SDK_HOME:+$ANDROID_SDK_HOME/.android}" "${ANDROID_PREFS_ROOT:+$ANDROID_PREFS_ROOT/.android}"; do
+              [ -n "$dir" ] || continue
+              mkdir -p "$dir"
+              echo "$DEBUG_KEYSTORE_B64" | base64 -d > "$dir/debug.keystore"
+              ls -la "$dir/debug.keystore"
+            done
           fi
 
       - name: Build
         run: ./gradlew :mobile:assembleFossBetaDebug
+
+      - name: Show signing key
+        run: |
+          find / -name debug.keystore -not -path "/proc/*" 2>/dev/null | xargs -r ls -la
+          keytool -printcert -jarfile mobile/build/outputs/apk/fossBeta/debug/*.apk | grep -E "Valid from|SHA256:"
 
       - uses: actions/upload-artifact@v4
         with:
