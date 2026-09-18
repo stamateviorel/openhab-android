@@ -43,6 +43,7 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,6 +72,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import de.duenndns.ssl.MemorizingTrustManager
@@ -177,6 +179,7 @@ class MainActivity : AbstractBaseActivity() {
     private var lastPrimaryCloudConnectionResult: ConnectionFactory.CloudConnectionResult? = null
 
     private var pendingAction: PendingAction? = null
+    private lateinit var titleButton: MaterialButton
     private lateinit var controller: ContentController
     var serverProperties: ServerProperties? = null
         private set
@@ -245,7 +248,7 @@ class MainActivity : AbstractBaseActivity() {
         setProgressIndicatorVisible(false)
 
         setupDrawer()
-        findViewById<View>(R.id.openhab_toolbar).setOnClickListener { v -> showServerPopup(v) }
+        setupTitleButton()
 
         viewPool = RecyclerView.RecycledViewPool()
 
@@ -1137,7 +1140,41 @@ class MainActivity : AbstractBaseActivity() {
         preferenceActivityCallback.launch(settingsIntent)
     }
 
-    private fun showServerPopup(anchor: View) {
+    private fun setupTitleButton() {
+        val toolbar = findViewById<ViewGroup>(R.id.openhab_toolbar)
+        titleButton = layoutInflater.inflate(R.layout.toolbar_title_button, toolbar, false) as MaterialButton
+        titleButton.setOnClickListener { v -> showServerPopup(v) }
+        toolbar.addView(titleButton)
+        // The button replaces the title. Once set explicitly, the toolbar doesn't follow the activity title anymore.
+        supportActionBar?.title = ""
+        updateTitleButton()
+    }
+
+    override fun onTitleChanged(title: CharSequence?, color: Int) {
+        super.onTitleChanged(title, color)
+        if (::titleButton.isInitialized) {
+            updateTitleButton()
+        }
+    }
+
+    private fun updateTitleButton() {
+        val hasChoice = buildPopupEntries().size > 1
+        titleButton.text = title
+        titleButton.isClickable = hasChoice
+        titleButton.icon = if (hasChoice) {
+            ContextCompat.getDrawable(this, R.drawable.ic_menu_down_grey_24dp)
+        } else {
+            null
+        }
+    }
+
+    private class PopupEntry(val serverId: Int, val serverName: String?, val ui: WebViewUi?, val titleRes: Int)
+
+    /**
+     * One entry per server and UI. What's installed is only known for the active server,
+     * for the other ones offer sitemap and Main UI.
+     */
+    private fun buildPopupEntries(): List<PopupEntry> {
         val activeServerId = prefs.getActiveServerId()
         val configs = if (connection is DemoConnection) {
             emptyList()
@@ -1154,47 +1191,46 @@ class MainActivity : AbstractBaseActivity() {
             Triple(R.id.habpanel, WebViewUi.HABPANEL, R.string.mainmenu_openhab_habpanel),
             Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
         )
-        val currentUi = controller.currentWebViewUi
+        return serverNames.flatMap { (serverId, serverName) ->
+            val uis = webViewUis.filter { (drawerItemId, ui, _) ->
+                if (serverId == activeServerId) drawerMenu.findItem(drawerItemId).isVisible else ui == WebViewUi.MAIN_UI
+            }
+            listOf(PopupEntry(serverId, serverName, null, R.string.mainmenu_openhab_sitemaps)) +
+                uis.map { (_, ui, titleRes) -> PopupEntry(serverId, serverName, ui, titleRes) }
+        }
+    }
 
-        // One entry per server and UI. What's installed is only known for the active server,
-        // for the other ones offer sitemap and Main UI.
-        val entries = mutableListOf<Pair<Int, WebViewUi?>>()
+    private fun showServerPopup(anchor: View) {
+        val activeServerId = prefs.getActiveServerId()
+        val currentUi = controller.currentWebViewUi
+        val entries = buildPopupEntries()
+        val serverIds = entries.map { entry -> entry.serverId }.distinct()
+
         val popup = PopupMenu(this, anchor)
         MenuCompat.setGroupDividerEnabled(popup.menu, true)
-        serverNames.entries.forEachIndexed { groupIndex, (serverId, serverName) ->
-            val isActive = serverId == activeServerId
-            val uis = webViewUis.filter { (drawerItemId, ui, _) ->
-                if (isActive) drawerMenu.findItem(drawerItemId).isVisible else ui == WebViewUi.MAIN_UI
-            }
-            val titles = listOf<Pair<WebViewUi?, Int>>(null to R.string.mainmenu_openhab_sitemaps) +
-                uis.map { (_, ui, titleRes) -> ui to titleRes }
-            titles.forEach { (ui, titleRes) ->
-                val uiName = getString(titleRes)
-                val title = if (serverName != null) "$serverName \u00b7 $uiName" else uiName
-                val isCurrent = isActive && if (ui == null) controller.isShowingSitemap else ui == currentUi
-                popup.menu.add(groupIndex, entries.size, entries.size, title.highlightIf(isCurrent))
-                entries.add(serverId to ui)
-            }
-        }
-        if (entries.size <= 1) {
-            return
+        entries.forEachIndexed { index, entry ->
+            val uiName = getString(entry.titleRes)
+            val title = if (entry.serverName != null) "${entry.serverName} \u00b7 $uiName" else uiName
+            val isCurrent = entry.serverId == activeServerId &&
+                if (entry.ui == null) controller.isShowingSitemap else entry.ui == currentUi
+            popup.menu.add(serverIds.indexOf(entry.serverId), index, index, title.highlightIf(isCurrent))
         }
 
         popup.setOnMenuItemClickListener { item ->
-            val (serverId, ui) = entries[item.itemId]
+            val entry = entries[item.itemId]
             when {
-                serverId != activeServerId -> {
+                entry.serverId != activeServerId -> {
                     // Executed once the properties of the new server are loaded
-                    pendingAction = ui?.let { PendingAction.OpenWebViewUi(it, serverId, null) }
+                    pendingAction = entry.ui?.let { ui -> PendingAction.OpenWebViewUi(ui, entry.serverId, null) }
                     prefs.edit {
-                        putActiveServerId(serverId)
+                        putActiveServerId(entry.serverId)
                     }
                     updateServerNameInDrawer()
                 }
 
-                ui == null && currentUi != null -> controller.closeFragment()
+                entry.ui == null && currentUi != null -> controller.closeFragment()
 
-                ui != null && ui != currentUi -> openWebViewUi(ui, false, null)
+                entry.ui != null && entry.ui != currentUi -> openWebViewUi(entry.ui, false, null)
             }
             true
         }
@@ -1318,6 +1354,9 @@ class MainActivity : AbstractBaseActivity() {
                 (NfcAdapter.getDefaultAdapter(this) != null || Util.isEmulator()) &&
                 prefs.getPrimaryServerId() == prefs.getActiveServerId() &&
                 prefs.getBoolean(PrefKeys.DRAWER_ENTRY_NFC, true)
+        }
+        if (::titleButton.isInitialized) {
+            updateTitleButton()
         }
     }
 
