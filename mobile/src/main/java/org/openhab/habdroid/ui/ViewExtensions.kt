@@ -16,7 +16,6 @@ package org.openhab.habdroid.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
@@ -92,23 +91,31 @@ fun Context.clearWebViewCaches() {
     }
     ProfileStore.getInstance().allProfileNames
         .filter { it != Profile.DEFAULT_PROFILE_NAME }
-        .forEach { name ->
-            val webView = WebView(this)
-            WebViewCompat.setProfile(webView, name)
-            webView.clearCache(true)
-            webView.destroy()
-        }
+        .forEach { name -> clearWebViewCache(name) }
 }
 
-fun deleteWebViewDataForServer(serverId: Int) {
+private fun Context.clearWebViewCache(profileName: String) {
+    val webView = WebView(this)
+    WebViewCompat.setProfile(webView, profileName)
+    webView.clearCache(true)
+    webView.destroy()
+}
+
+fun Context.deleteWebViewDataForServer(serverId: Int) {
     if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
         return
     }
+    val name = buildWebViewProfileName(serverId)
+    val store = ProfileStore.getInstance()
     try {
-        ProfileStore.getInstance().deleteProfile(buildWebViewProfileName(serverId))
+        store.deleteProfile(name)
     } catch (e: IllegalStateException) {
-        // Profile is still in use by a WebView
-        Log.w("WebViewProfile", "Could not delete WebView profile of server $serverId", e)
+        // Profile is in use by a WebView. Server IDs are reused, so don't leave the data for the next server.
+        store.getProfile(name)?.let { profile ->
+            profile.cookieManager.removeAllCookies(null)
+            profile.webStorage.deleteAllData()
+            clearWebViewCache(name)
+        }
     }
 }
 
