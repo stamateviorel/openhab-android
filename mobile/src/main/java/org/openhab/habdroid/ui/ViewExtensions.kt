@@ -26,8 +26,8 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.RemoteViews
 import androidx.appcompat.widget.TooltipCompat
-import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.content.edit
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.net.toUri
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.webkit.Profile
