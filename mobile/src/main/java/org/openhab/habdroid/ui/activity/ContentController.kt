@@ -275,6 +275,8 @@ abstract class ContentController protected constructor(private val activity: Mai
         }
     }
 
+    val isShowingSitemap get() = temporaryPage == null && noConnectionFragment == null
+
     val currentWebViewUi: WebViewUi?
         get() = listOf(WebViewUi.HABPANEL, WebViewUi.MAIN_UI, WebViewUi.FRONTAIL)
             .firstOrNull { ui -> ui.fragment.isInstance(temporaryPage) }

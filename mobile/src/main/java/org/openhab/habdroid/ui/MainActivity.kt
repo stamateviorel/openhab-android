@@ -25,6 +25,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.content.res.ColorStateList
+import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.location.LocationManager
@@ -34,7 +35,9 @@ import android.os.Bundle
 import android.provider.Settings
 import android.speech.SpeechRecognizer
 import android.text.SpannableStringBuilder
+import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.util.Base64
 import android.util.Log
 import android.view.Menu
@@ -56,6 +59,7 @@ import androidx.core.graphics.drawable.toDrawable
 import androidx.core.location.LocationManagerCompat
 import androidx.core.text.inSpans
 import androidx.core.view.GravityCompat
+import androidx.core.view.MenuCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.forEach
@@ -1134,36 +1138,68 @@ class MainActivity : AbstractBaseActivity() {
     }
 
     private fun showServerPopup(anchor: View) {
-        if (connection is DemoConnection) {
-            return
-        }
-        val configs = prefs.getConfiguredServerIds()
-            .mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
-        if (configs.size <= 1) {
-            return
+        val popup = PopupMenu(this, anchor)
+        MenuCompat.setGroupDividerEnabled(popup.menu, true)
+
+        val configs = if (connection is DemoConnection) {
+            emptyList()
+        } else {
+            prefs.getConfiguredServerIds().mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
         }
         val activeServerId = prefs.getActiveServerId()
-        val popup = PopupMenu(this, anchor)
-        configs.forEachIndexed { index, config ->
-            popup.menu.add(Menu.NONE, config.id, index, config.name).apply {
-                isCheckable = true
-                isChecked = config.id == activeServerId
+        if (configs.size > 1) {
+            configs.forEachIndexed { index, config ->
+                val title = config.name.highlightIf(config.id == activeServerId)
+                popup.menu.add(POPUP_GROUP_SERVERS, config.id, index, title)
             }
         }
+
+        val currentUi = controller.currentWebViewUi
+        val uiEntries = listOf(
+            Triple(R.id.main_ui, WebViewUi.MAIN_UI, R.string.mainmenu_openhab_main_ui),
+            Triple(R.id.habpanel, WebViewUi.HABPANEL, R.string.mainmenu_openhab_habpanel),
+            Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
+        ).filter { (drawerItemId, _, _) -> drawerMenu.findItem(drawerItemId).isVisible }
+        if (uiEntries.isNotEmpty()) {
+            val sitemapTitle = getString(R.string.mainmenu_openhab_sitemaps)
+                .highlightIf(controller.isShowingSitemap)
+            popup.menu.add(POPUP_GROUP_UIS, R.id.sitemaps, 0, sitemapTitle)
+            uiEntries.forEachIndexed { index, (itemId, ui, titleRes) ->
+                popup.menu.add(POPUP_GROUP_UIS, itemId, index + 1, getString(titleRes).highlightIf(ui == currentUi))
+            }
+        }
+        if (!popup.menu.hasVisibleItems()) {
+            return
+        }
+
         popup.setOnMenuItemClickListener { item ->
-            if (item.itemId != activeServerId) {
-                // Stay in the currently shown UI: Executed once the properties of the new server are loaded
-                pendingAction = controller.currentWebViewUi?.let { ui ->
-                    PendingAction.OpenWebViewUi(ui, item.itemId, null)
+            val selectedUi = uiEntries.firstOrNull { (itemId, _, _) -> itemId == item.itemId }?.second
+            when {
+                item.groupId == POPUP_GROUP_SERVERS && item.itemId != activeServerId -> {
+                    // Stay in the currently shown UI: Executed once the properties of the new server are loaded
+                    pendingAction = currentUi?.let { ui -> PendingAction.OpenWebViewUi(ui, item.itemId, null) }
+                    prefs.edit {
+                        putActiveServerId(item.itemId)
+                    }
+                    updateServerNameInDrawer()
                 }
-                prefs.edit {
-                    putActiveServerId(item.itemId)
-                }
-                updateServerNameInDrawer()
+
+                item.groupId == POPUP_GROUP_UIS && selectedUi == null && currentUi != null -> controller.closeFragment()
+
+                selectedUi != null && selectedUi != currentUi -> openWebViewUi(selectedUi, false, null)
             }
             true
         }
         popup.show()
+    }
+
+    private fun String.highlightIf(highlight: Boolean): CharSequence = if (highlight) {
+        val color = resolveThemedColor(R.attr.colorPrimary)
+        SpannableStringBuilder().inSpans(StyleSpan(Typeface.BOLD), ForegroundColorSpan(color)) {
+            append(this@highlightIf)
+        }
+    } else {
+        this
     }
 
     private fun updateDrawerServerEntries() {
@@ -1834,6 +1870,9 @@ class MainActivity : AbstractBaseActivity() {
         const val SNACKBAR_TAG_SHORTCUT_INFO = "shortcutInfo"
         const val SNACKBAR_TAG_SERVER_MISSING = "serverMissing"
         const val SNACKBAR_TAG_SWITCHED_SERVER = "switchedServer"
+
+        private const val POPUP_GROUP_SERVERS = 1
+        private const val POPUP_GROUP_UIS = 2
 
         private const val STATE_KEY_SERVER_PROPERTIES = "serverProperties"
         private const val STATE_KEY_SITEMAP_SELECTION_SHOWN = "isSitemapSelectionDialogShown"
