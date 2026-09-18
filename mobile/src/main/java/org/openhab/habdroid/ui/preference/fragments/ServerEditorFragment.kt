@@ -132,7 +132,7 @@ class ServerEditorFragment :
     override fun onConfirmed(tag: String?) = when (tag) {
         "delete_server_confirmation" -> {
             config.removeFromPrefs(prefs, secretPrefs)
-            deleteWebViewDataForServer(config.id)
+            preferenceManager.context.deleteWebViewDataForServer(config.id)
             WorkManager.getInstance(preferenceManager.context).apply {
                 cancelAllWorkByTag(BackgroundTasksManager.buildWorkerTagForServer(config.id))
                 pruneWork()
