@@ -1138,55 +1138,63 @@ class MainActivity : AbstractBaseActivity() {
     }
 
     private fun showServerPopup(anchor: View) {
-        val popup = PopupMenu(this, anchor)
-        MenuCompat.setGroupDividerEnabled(popup.menu, true)
-
+        val activeServerId = prefs.getActiveServerId()
         val configs = if (connection is DemoConnection) {
             emptyList()
         } else {
             prefs.getConfiguredServerIds().mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
         }
-        val activeServerId = prefs.getActiveServerId()
-        if (configs.size > 1) {
-            configs.forEachIndexed { index, config ->
-                val title = config.name.highlightIf(config.id == activeServerId)
-                popup.menu.add(POPUP_GROUP_SERVERS, config.id, index, title)
-            }
+        val serverNames = if (configs.size > 1) {
+            configs.associate { config -> config.id to config.name }
+        } else {
+            mapOf(activeServerId to null)
         }
-
-        val currentUi = controller.currentWebViewUi
-        val uiEntries = listOf(
+        val webViewUis = listOf(
             Triple(R.id.main_ui, WebViewUi.MAIN_UI, R.string.mainmenu_openhab_main_ui),
             Triple(R.id.habpanel, WebViewUi.HABPANEL, R.string.mainmenu_openhab_habpanel),
             Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
-        ).filter { (drawerItemId, _, _) -> drawerMenu.findItem(drawerItemId).isVisible }
-        if (uiEntries.isNotEmpty()) {
-            val sitemapTitle = getString(R.string.mainmenu_openhab_sitemaps)
-                .highlightIf(controller.isShowingSitemap)
-            popup.menu.add(POPUP_GROUP_UIS, R.id.sitemaps, 0, sitemapTitle)
-            uiEntries.forEachIndexed { index, (itemId, ui, titleRes) ->
-                popup.menu.add(POPUP_GROUP_UIS, itemId, index + 1, getString(titleRes).highlightIf(ui == currentUi))
+        )
+        val currentUi = controller.currentWebViewUi
+
+        // One entry per server and UI. What's installed is only known for the active server,
+        // for the other ones offer sitemap and Main UI.
+        val entries = mutableListOf<Pair<Int, WebViewUi?>>()
+        val popup = PopupMenu(this, anchor)
+        MenuCompat.setGroupDividerEnabled(popup.menu, true)
+        serverNames.entries.forEachIndexed { groupIndex, (serverId, serverName) ->
+            val isActive = serverId == activeServerId
+            val uis = webViewUis.filter { (drawerItemId, ui, _) ->
+                if (isActive) drawerMenu.findItem(drawerItemId).isVisible else ui == WebViewUi.MAIN_UI
+            }
+            val titles = listOf<Pair<WebViewUi?, Int>>(null to R.string.mainmenu_openhab_sitemaps) +
+                uis.map { (_, ui, titleRes) -> ui to titleRes }
+            titles.forEach { (ui, titleRes) ->
+                val uiName = getString(titleRes)
+                val title = if (serverName != null) "$serverName \u00b7 $uiName" else uiName
+                val isCurrent = isActive && if (ui == null) controller.isShowingSitemap else ui == currentUi
+                popup.menu.add(groupIndex, entries.size, entries.size, title.highlightIf(isCurrent))
+                entries.add(serverId to ui)
             }
         }
-        if (!popup.menu.hasVisibleItems()) {
+        if (entries.size <= 1) {
             return
         }
 
         popup.setOnMenuItemClickListener { item ->
-            val selectedUi = uiEntries.firstOrNull { (itemId, _, _) -> itemId == item.itemId }?.second
+            val (serverId, ui) = entries[item.itemId]
             when {
-                item.groupId == POPUP_GROUP_SERVERS && item.itemId != activeServerId -> {
-                    // Stay in the currently shown UI: Executed once the properties of the new server are loaded
-                    pendingAction = currentUi?.let { ui -> PendingAction.OpenWebViewUi(ui, item.itemId, null) }
+                serverId != activeServerId -> {
+                    // Executed once the properties of the new server are loaded
+                    pendingAction = ui?.let { PendingAction.OpenWebViewUi(it, serverId, null) }
                     prefs.edit {
-                        putActiveServerId(item.itemId)
+                        putActiveServerId(serverId)
                     }
                     updateServerNameInDrawer()
                 }
 
-                item.groupId == POPUP_GROUP_UIS && selectedUi == null && currentUi != null -> controller.closeFragment()
+                ui == null && currentUi != null -> controller.closeFragment()
 
-                selectedUi != null && selectedUi != currentUi -> openWebViewUi(selectedUi, false, null)
+                ui != null && ui != currentUi -> openWebViewUi(ui, false, null)
             }
             true
         }
@@ -1870,9 +1878,6 @@ class MainActivity : AbstractBaseActivity() {
         const val SNACKBAR_TAG_SHORTCUT_INFO = "shortcutInfo"
         const val SNACKBAR_TAG_SERVER_MISSING = "serverMissing"
         const val SNACKBAR_TAG_SWITCHED_SERVER = "switchedServer"
-
-        private const val POPUP_GROUP_SERVERS = 1
-        private const val POPUP_GROUP_UIS = 2
 
         private const val STATE_KEY_SERVER_PROPERTIES = "serverProperties"
         private const val STATE_KEY_SITEMAP_SELECTION_SHOWN = "isSitemapSelectionDialogShown"
