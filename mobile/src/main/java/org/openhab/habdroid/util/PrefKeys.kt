@@ -41,6 +41,7 @@ object PrefKeys {
     fun buildServerKey(id: Int, prefix: String) = "$prefix$id"
 
     const val START_PAGE = "start_page"
+    const val MAIN_UI_TOOLBAR = "main_ui_toolbar"
     const val SHOW_SITEMAPS_IN_DRAWER = "show_sitemaps"
     const val SITEMAP_COMPACT_MODE = "sitemap_compact_mode"
     const val SHOW_ICONS = "show_icons"

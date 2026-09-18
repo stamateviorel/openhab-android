@@ -67,6 +67,7 @@ import org.openhab.habdroid.ui.ConnectionWebViewClient
 import org.openhab.habdroid.ui.MainActivity
 import org.openhab.habdroid.ui.isolateForServer
 import org.openhab.habdroid.ui.setUpForConnection
+import org.openhab.habdroid.util.PrefKeys
 import org.openhab.habdroid.util.getActiveServerId
 import org.openhab.habdroid.util.getConfiguredServerIds
 import org.openhab.habdroid.util.getConnectionFactory
@@ -214,6 +215,12 @@ abstract class AbstractWebViewFragment :
                     }
                 }
 
+                override fun onReceivedTitle(view: WebView?, title: String?) {
+                    if (wantsActionBar) {
+                        mainActivity?.supportActionBar?.subtitle = title
+                    }
+                }
+
                 override fun onConsoleMessage(message: ConsoleMessage): Boolean {
                     Log.d(TAG, "${message.message()} -- From line ${message.lineNumber()} of ${message.sourceId()}")
                     return true
@@ -252,6 +259,7 @@ abstract class AbstractWebViewFragment :
 
     override fun onDestroyView() {
         super.onDestroyView()
+        mainActivity?.supportActionBar?.subtitle = null
         webView?.destroy()
         binding = null
     }
@@ -402,7 +410,11 @@ abstract class AbstractWebViewFragment :
     }
 
     private fun hideActionBar() {
+        if (context?.getPrefs()?.getBoolean(PrefKeys.MAIN_UI_TOOLBAR, false) == true) {
+            return
+        }
         wantsActionBar = false
+        mainActivity?.supportActionBar?.subtitle = null
         callback?.updateActionBarState()
     }
 
