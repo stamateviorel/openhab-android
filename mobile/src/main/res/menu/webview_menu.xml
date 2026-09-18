@@ -2,6 +2,13 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/webview_settings"
+        android:icon="@drawable/ic_settings_outline_grey_24dp"
+        android:orderInCategory="100"
+        android:title="@string/mainmenu_openhab_preferences"
+        app:iconTint="?android:textColorSecondary"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/webview_add_shortcut"
         android:orderInCategory="200"
         android:title="@string/home_shortcut_pin_to_home"

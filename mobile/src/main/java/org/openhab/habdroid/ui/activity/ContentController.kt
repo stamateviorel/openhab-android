@@ -275,6 +275,10 @@ abstract class ContentController protected constructor(private val activity: Mai
         }
     }
 
+    val currentWebViewUi: WebViewUi?
+        get() = listOf(WebViewUi.HABPANEL, WebViewUi.MAIN_UI, WebViewUi.FRONTAIL)
+            .firstOrNull { ui -> ui.fragment.isInstance(temporaryPage) }
+
     fun showWebViewUi(ui: WebViewUi, isStackRoot: Boolean, subpage: String?) {
         val webViewFragment = ui.fragment.getDeclaredConstructor().newInstance()
         webViewFragment.arguments = bundleOf(

@@ -288,12 +288,17 @@ abstract class AbstractWebViewFragment :
     }
 
     override fun onCreateMenu(menu: Menu, inflater: MenuInflater) {
-        if (ShortcutManagerCompat.isRequestPinShortcutSupported(requireContext())) {
-            inflater.inflate(R.menu.webview_menu, menu)
-        }
+        inflater.inflate(R.menu.webview_menu, menu)
+        menu.findItem(R.id.webview_add_shortcut).isVisible =
+            ShortcutManagerCompat.isRequestPinShortcutSupported(requireContext())
     }
 
     override fun onMenuItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        R.id.webview_settings -> {
+            mainActivity?.openSettings()
+            true
+        }
+
         R.id.webview_add_shortcut -> {
             pinShortcut()
             true
