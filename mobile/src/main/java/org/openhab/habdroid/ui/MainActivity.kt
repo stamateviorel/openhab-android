@@ -47,6 +47,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
 import androidx.core.content.edit
@@ -240,6 +241,7 @@ class MainActivity : AbstractBaseActivity() {
         setProgressIndicatorVisible(false)
 
         setupDrawer()
+        findViewById<View>(R.id.openhab_toolbar).setOnClickListener { v -> showServerPopup(v) }
 
         viewPool = RecyclerView.RecycledViewPool()
 
@@ -1067,9 +1069,7 @@ class MainActivity : AbstractBaseActivity() {
                 }
 
                 R.id.settings -> {
-                    val settingsIntent = Intent(this@MainActivity, PreferencesActivity::class.java)
-                    settingsIntent.putExtra(PreferencesActivity.START_EXTRA_SERVER_PROPERTIES, serverProperties)
-                    preferenceActivityCallback.launch(settingsIntent)
+                    openSettings()
                     handled = true
                 }
 
@@ -1116,6 +1116,45 @@ class MainActivity : AbstractBaseActivity() {
         val headerView = binding.leftDrawer.getHeaderView(0)
         drawerHeaderBinding = DrawerHeaderBinding.bind(headerView)
         drawerHeaderBinding.serverSelector.setOnClickListener { updateDrawerMode(!inServerSelectionMode) }
+    }
+
+    fun openSettings() {
+        val settingsIntent = Intent(this, PreferencesActivity::class.java)
+        settingsIntent.putExtra(PreferencesActivity.START_EXTRA_SERVER_PROPERTIES, serverProperties)
+        preferenceActivityCallback.launch(settingsIntent)
+    }
+
+    private fun showServerPopup(anchor: View) {
+        if (connection is DemoConnection) {
+            return
+        }
+        val configs = prefs.getConfiguredServerIds()
+            .mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
+        if (configs.size <= 1) {
+            return
+        }
+        val activeServerId = prefs.getActiveServerId()
+        val popup = PopupMenu(this, anchor)
+        configs.forEachIndexed { index, config ->
+            popup.menu.add(Menu.NONE, config.id, index, config.name).apply {
+                isCheckable = true
+                isChecked = config.id == activeServerId
+            }
+        }
+        popup.setOnMenuItemClickListener { item ->
+            if (item.itemId != activeServerId) {
+                // Stay in the currently shown UI: Executed once the properties of the new server are loaded
+                pendingAction = controller.currentWebViewUi?.let { ui ->
+                    PendingAction.OpenWebViewUi(ui, item.itemId, null)
+                }
+                prefs.edit {
+                    putActiveServerId(item.itemId)
+                }
+                updateServerNameInDrawer()
+            }
+            true
+        }
+        popup.show()
     }
 
     private fun updateDrawerServerEntries() {
