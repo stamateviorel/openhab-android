@@ -1159,7 +1159,18 @@ class MainActivity : AbstractBaseActivity() {
 
     private fun updateTitleButton() {
         val hasChoice = buildPopupEntries().size > 1
-        titleButton.text = title
+        val serverName = if (connection is DemoConnection) {
+            null
+        } else {
+            ServerConfiguration.load(prefs, getSecretPrefs(), prefs.getActiveServerId())?.name
+        }
+        val currentUi = controller.currentWebViewUi
+        val uiTitle = webViewUis.firstOrNull { (_, ui, _) -> ui == currentUi }
+            ?.let { (_, _, titleRes) -> getString(titleRes) }
+            ?: controller.currentTitle
+        titleButton.text = listOfNotNull(serverName, uiTitle?.toString().orEmpty().ifEmpty { null })
+            .joinToString(" \u00b7 ")
+            .ifEmpty { getString(R.string.app_name) }
         titleButton.isClickable = hasChoice
         titleButton.icon = if (hasChoice) {
             ContextCompat.getDrawable(this, R.drawable.ic_menu_down_grey_24dp)
@@ -1167,6 +1178,12 @@ class MainActivity : AbstractBaseActivity() {
             null
         }
     }
+
+    private val webViewUis = listOf(
+        Triple(R.id.main_ui, WebViewUi.MAIN_UI, R.string.mainmenu_openhab_main_ui),
+        Triple(R.id.habpanel, WebViewUi.HABPANEL, R.string.mainmenu_openhab_habpanel),
+        Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
+    )
 
     private class PopupEntry(val serverId: Int, val serverName: String?, val ui: WebViewUi?, val titleRes: Int)
 
@@ -1186,11 +1203,6 @@ class MainActivity : AbstractBaseActivity() {
         } else {
             mapOf(activeServerId to null)
         }
-        val webViewUis = listOf(
-            Triple(R.id.main_ui, WebViewUi.MAIN_UI, R.string.mainmenu_openhab_main_ui),
-            Triple(R.id.habpanel, WebViewUi.HABPANEL, R.string.mainmenu_openhab_habpanel),
-            Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
-        )
         return serverNames.flatMap { (serverId, serverName) ->
             val uis = webViewUis.filter { (drawerItemId, ui, _) ->
                 if (serverId == activeServerId) drawerMenu.findItem(drawerItemId).isVisible else ui == WebViewUi.MAIN_UI
