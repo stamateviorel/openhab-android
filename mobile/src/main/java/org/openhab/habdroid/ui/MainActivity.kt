@@ -1146,7 +1146,8 @@ class MainActivity : AbstractBaseActivity() {
     }
 
     /**
-     * The app's entries for Main UI's sidebar as JSON, see OHApp.d.ts in openhab-webui
+     * The app's entries for Main UI's sidebar as JSON, see OHApp.d.ts in openhab-webui.
+     * Same entries, order and titles as in the drawer.
      */
     fun buildAppMenu(): String {
         val items = JSONArray()
@@ -1159,6 +1160,12 @@ class MainActivity : AbstractBaseActivity() {
                     .put("active", active)
             )
         }
+        fun addIfInDrawer(drawerItemId: Int, id: String, icon: String) {
+            val drawerItem = drawerMenu.findItem(drawerItemId)
+            if (drawerItem.isVisible) {
+                add(id, drawerItem.title, icon)
+            }
+        }
 
         if (connection !is DemoConnection) {
             val activeServerId = prefs.getActiveServerId()
@@ -1166,20 +1173,21 @@ class MainActivity : AbstractBaseActivity() {
                 .mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
             if (configs.size > 1) {
                 configs.forEach { config ->
-                    add("$APP_MENU_SERVER_PREFIX${config.id}", config.name, "house", config.id == activeServerId)
+                    add("$APP_MENU_SERVER_PREFIX${config.id}", config.name, "material:dns", config.id == activeServerId)
                 }
             }
         }
-        if (serverProperties?.sitemaps?.isNotEmpty() == true) {
-            add(APP_MENU_SITEMAPS, getString(R.string.mainmenu_openhab_sitemaps), "list_bullet")
-        }
-        if (drawerMenu.findItem(R.id.habpanel).isVisible) {
-            add(APP_MENU_HABPANEL, getString(R.string.mainmenu_openhab_habpanel), "rectangle_grid_2x2")
-        }
-        if (drawerMenu.findItem(R.id.notifications).isVisible) {
-            add(APP_MENU_NOTIFICATIONS, getString(R.string.app_notifications), "bell")
-        }
-        add(APP_MENU_SETTINGS, getString(R.string.mainmenu_openhab_preferences), "gear_alt")
+        serverProperties?.sitemaps
+            ?.sortedWithDefaultName(prefs.getDefaultSitemap(connection)?.name.orEmpty())
+            ?.forEach { sitemap ->
+                add("$APP_MENU_SITEMAP_PREFIX${sitemap.name}", sitemap.label, "material:view_list")
+            }
+        addIfInDrawer(R.id.habpanel, APP_MENU_HABPANEL, "material:dashboard")
+        addIfInDrawer(R.id.notifications, APP_MENU_NOTIFICATIONS, "material:notifications")
+        addIfInDrawer(R.id.frontail, APP_MENU_FRONTAIL, "material:format_align_left")
+        addIfInDrawer(R.id.nfc, APP_MENU_NFC, "material:nfc")
+        addIfInDrawer(R.id.settings, APP_MENU_SETTINGS, "material:settings")
+        addIfInDrawer(R.id.about, APP_MENU_ABOUT, "material:info_outline")
 
         return JSONObject()
             .put("title", getString(R.string.app_name))
@@ -1201,17 +1209,28 @@ class MainActivity : AbstractBaseActivity() {
                 }
             }
 
-            id == APP_MENU_SITEMAPS -> controller.closeFragment()
+            id.startsWith(APP_MENU_SITEMAP_PREFIX) -> {
+                val name = id.removePrefix(APP_MENU_SITEMAP_PREFIX)
+                serverProperties?.sitemaps?.firstOrNull { sitemap -> sitemap.name == name }?.let { sitemap ->
+                    controller.openSitemap(sitemap)
+                }
+            }
 
             id == APP_MENU_HABPANEL -> openWebViewUi(WebViewUi.HABPANEL, true, null)
 
             id == APP_MENU_NOTIFICATIONS -> openNotifications(null, false)
+
+            id == APP_MENU_FRONTAIL -> openWebViewUi(WebViewUi.FRONTAIL, true, null)
+
+            id == APP_MENU_NFC -> startActivity(Intent(this, NfcItemPickerActivity::class.java))
 
             id == APP_MENU_SETTINGS -> {
                 val settingsIntent = Intent(this, PreferencesActivity::class.java)
                 settingsIntent.putExtra(PreferencesActivity.START_EXTRA_SERVER_PROPERTIES, serverProperties)
                 preferenceActivityCallback.launch(settingsIntent)
             }
+
+            id == APP_MENU_ABOUT -> startActivity(Intent(this, AboutActivity::class.java))
         }
     }
 
@@ -1885,10 +1904,13 @@ class MainActivity : AbstractBaseActivity() {
         const val SNACKBAR_TAG_SWITCHED_SERVER = "switchedServer"
 
         private const val APP_MENU_SERVER_PREFIX = "server:"
-        private const val APP_MENU_SITEMAPS = "sitemaps"
+        private const val APP_MENU_SITEMAP_PREFIX = "sitemap:"
         private const val APP_MENU_HABPANEL = "habpanel"
         private const val APP_MENU_NOTIFICATIONS = "notifications"
+        private const val APP_MENU_FRONTAIL = "frontail"
+        private const val APP_MENU_NFC = "nfc"
         private const val APP_MENU_SETTINGS = "settings"
+        private const val APP_MENU_ABOUT = "about"
 
         private const val STATE_KEY_SERVER_PROPERTIES = "serverProperties"
         private const val STATE_KEY_SITEMAP_SELECTION_SHOWN = "isSitemapSelectionDialogShown"
