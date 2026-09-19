@@ -91,6 +91,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.json.JSONArray
+import org.json.JSONObject
 import org.openhab.habdroid.BuildConfig
 import org.openhab.habdroid.R
 import org.openhab.habdroid.background.BackgroundTasksManager
@@ -893,20 +895,29 @@ class MainActivity : AbstractBaseActivity() {
                     updateDrawerServerEntries()
                     val fallbackUi = listOf(WebViewUi.MAIN_UI, WebViewUi.HABPANEL)
                         .firstOrNull { ui -> result.props.hasWebViewUiInstalled(ui) }
-                    if (result.props.sitemaps.isEmpty() && fallbackUi != null) {
-                        Log.d(TAG, "openHAB returned empty Sitemap list, fall back to web UI")
-                        if (pendingAction == null) {
-                            pendingAction = PendingAction.OpenWebViewUi(fallbackUi, prefs.getActiveServerId(), null)
+                    when {
+                        result.props.sitemaps.isNotEmpty() -> {
+                            chooseSitemap()
+                            updateSitemapDrawerEntries()
                         }
-                    } else if (result.props.sitemaps.isEmpty()) {
-                        Log.e(TAG, "openHAB returned empty Sitemap list")
-                        controller.indicateServerCommunicationFailure(getString(R.string.error_empty_sitemap_list))
-                        scheduleRetry {
-                            retryServerPropertyQuery()
+
+                        fallbackUi != null -> {
+                            Log.d(TAG, "openHAB returned empty Sitemap list, fall back to web UI")
+                            if (pendingAction == null) {
+                                pendingAction =
+                                    PendingAction.OpenWebViewUi(fallbackUi, prefs.getActiveServerId(), null)
+                            }
                         }
-                    } else {
-                        chooseSitemap()
-                        updateSitemapDrawerEntries()
+
+                        else -> {
+                            Log.e(TAG, "openHAB returned empty Sitemap list")
+                            controller.indicateServerCommunicationFailure(
+                                getString(R.string.error_empty_sitemap_list)
+                            )
+                            scheduleRetry {
+                                retryServerPropertyQuery()
+                            }
+                        }
                     }
                     if (connection !is DemoConnection) {
                         prefs.edit {
@@ -1305,6 +1316,74 @@ class MainActivity : AbstractBaseActivity() {
         }
     } else {
         this
+    /**
+     * The app's entries for Main UI's sidebar as JSON, see OHApp.d.ts in openhab-webui
+     */
+    fun buildAppMenu(): String {
+        val items = JSONArray()
+        fun add(id: String, title: CharSequence?, icon: String, active: Boolean = false) {
+            items.put(
+                JSONObject()
+                    .put("id", id)
+                    .put("title", title.toString())
+                    .put("icon", icon)
+                    .put("active", active)
+            )
+        }
+
+        if (connection !is DemoConnection) {
+            val activeServerId = prefs.getActiveServerId()
+            val configs = prefs.getConfiguredServerIds()
+                .mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
+            if (configs.size > 1) {
+                configs.forEach { config ->
+                    add("$APP_MENU_SERVER_PREFIX${config.id}", config.name, "house", config.id == activeServerId)
+                }
+            }
+        }
+        if (serverProperties?.sitemaps?.isNotEmpty() == true) {
+            add(APP_MENU_SITEMAPS, getString(R.string.mainmenu_openhab_sitemaps), "list_bullet")
+        }
+        if (drawerMenu.findItem(R.id.habpanel).isVisible) {
+            add(APP_MENU_HABPANEL, getString(R.string.mainmenu_openhab_habpanel), "rectangle_grid_2x2")
+        }
+        if (drawerMenu.findItem(R.id.notifications).isVisible) {
+            add(APP_MENU_NOTIFICATIONS, getString(R.string.app_notifications), "bell")
+        }
+        add(APP_MENU_SETTINGS, getString(R.string.mainmenu_openhab_preferences), "gear_alt")
+
+        return JSONObject()
+            .put("title", getString(R.string.app_name))
+            .put("items", items)
+            .toString()
+    }
+
+    fun onAppMenuItemSelected(id: String) {
+        when {
+            id.startsWith(APP_MENU_SERVER_PREFIX) -> {
+                val serverId = id.removePrefix(APP_MENU_SERVER_PREFIX).toIntOrNull() ?: return
+                if (serverId != prefs.getActiveServerId() && serverId in prefs.getConfiguredServerIds()) {
+                    // Executed once the properties of the new server are loaded
+                    pendingAction = PendingAction.OpenWebViewUi(WebViewUi.MAIN_UI, serverId, null)
+                    prefs.edit {
+                        putActiveServerId(serverId)
+                    }
+                    updateServerNameInDrawer()
+                }
+            }
+
+            id == APP_MENU_SITEMAPS -> controller.closeFragment()
+
+            id == APP_MENU_HABPANEL -> openWebViewUi(WebViewUi.HABPANEL, true, null)
+
+            id == APP_MENU_NOTIFICATIONS -> openNotifications(null, false)
+
+            id == APP_MENU_SETTINGS -> {
+                val settingsIntent = Intent(this, PreferencesActivity::class.java)
+                settingsIntent.putExtra(PreferencesActivity.START_EXTRA_SERVER_PROPERTIES, serverProperties)
+                preferenceActivityCallback.launch(settingsIntent)
+            }
+        }
     }
 
     private fun updateDrawerServerEntries() {
@@ -1990,6 +2069,12 @@ class MainActivity : AbstractBaseActivity() {
         const val SNACKBAR_TAG_SHORTCUT_INFO = "shortcutInfo"
         const val SNACKBAR_TAG_SERVER_MISSING = "serverMissing"
         const val SNACKBAR_TAG_SWITCHED_SERVER = "switchedServer"
+
+        private const val APP_MENU_SERVER_PREFIX = "server:"
+        private const val APP_MENU_SITEMAPS = "sitemaps"
+        private const val APP_MENU_HABPANEL = "habpanel"
+        private const val APP_MENU_NOTIFICATIONS = "notifications"
+        private const val APP_MENU_SETTINGS = "settings"
 
         private const val STATE_KEY_SERVER_PROPERTIES = "serverProperties"
         private const val STATE_KEY_SITEMAP_SELECTION_SHOWN = "isSitemapSelectionDialogShown"
