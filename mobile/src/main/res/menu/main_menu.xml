@@ -34,4 +34,16 @@
         android:title="Clear MTM"
         app:showAsAction="never"
         tools:ignore="HardcodedText" />
+    <item
+        android:id="@+id/mainmenu_notifications"
+        android:title="@string/app_notifications"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/mainmenu_nfc"
+        android:title="@string/intro_nfc"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/mainmenu_about"
+        android:title="@string/about_title"
+        app:showAsAction="never" />
 </menu>
