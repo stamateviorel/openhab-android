@@ -35,7 +35,16 @@ jobs:
           fi
 
       - name: Build
-        run: ./gradlew :mobile:assembleFossBetaDebug
+        run: ./gradlew :mobile:assembleFossBetaDebug :mobile:assembleFossBetaRelease
+
+      - name: Sign release APK with the fixed key
+        run: |
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          unsigned=$(ls mobile/build/outputs/apk/fossBeta/release/*-unsigned.apk)
+          "$tools/zipalign" -f 4 "$unsigned" aligned.apk
+          "$tools/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android \
+            --ks-key-alias androiddebugkey --key-pass pass:android --out openhab-test-release.apk aligned.apk
+          "$tools/apksigner" verify --print-certs openhab-test-release.apk | grep SHA-256
 
       - name: Show signing key
         run: |
@@ -45,3 +54,8 @@ jobs:
         with:
           name: openhab-foss-beta-debug
           path: mobile/build/outputs/apk/fossBeta/debug/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openhab-test-release
+          path: openhab-test-release.apk
