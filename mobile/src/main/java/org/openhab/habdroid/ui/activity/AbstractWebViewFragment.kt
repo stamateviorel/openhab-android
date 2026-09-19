@@ -93,6 +93,8 @@ abstract class AbstractWebViewFragment :
         private set
     var wantsActionBar = true
         private set
+    var pageTitle: String? = null
+        private set
 
     private val permissionRequester = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -214,9 +216,13 @@ abstract class AbstractWebViewFragment :
                 }
 
                 override fun onReceivedTitle(view: WebView?, title: String?) {
-                    if (wantsActionBar) {
-                        mainActivity?.supportActionBar?.subtitle = title
-                    }
+                    // Main UI reports 'page - section - openHAB'
+                    pageTitle = title.orEmpty()
+                        .split(" - ")
+                        .filterNot { part -> part.equals("openHAB", ignoreCase = true) }
+                        .joinToString(" - ")
+                        .ifEmpty { null }
+                    mainActivity?.updateTitle()
                 }
 
                 override fun onConsoleMessage(message: ConsoleMessage): Boolean {
@@ -257,7 +263,6 @@ abstract class AbstractWebViewFragment :
 
     override fun onDestroyView() {
         super.onDestroyView()
-        mainActivity?.supportActionBar?.subtitle = null
         webView?.destroy()
         binding = null
     }
@@ -286,17 +291,12 @@ abstract class AbstractWebViewFragment :
     }
 
     override fun onCreateMenu(menu: Menu, inflater: MenuInflater) {
-        inflater.inflate(R.menu.webview_menu, menu)
-        menu.findItem(R.id.webview_add_shortcut).isVisible =
-            ShortcutManagerCompat.isRequestPinShortcutSupported(requireContext())
+        if (ShortcutManagerCompat.isRequestPinShortcutSupported(requireContext())) {
+            inflater.inflate(R.menu.webview_menu, menu)
+        }
     }
 
     override fun onMenuItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-        R.id.webview_settings -> {
-            mainActivity?.openSettings()
-            true
-        }
-
         R.id.webview_add_shortcut -> {
             pinShortcut()
             true
@@ -417,7 +417,6 @@ abstract class AbstractWebViewFragment :
             return
         }
         wantsActionBar = false
-        mainActivity?.supportActionBar?.subtitle = null
         callback?.updateActionBarState()
     }
 
