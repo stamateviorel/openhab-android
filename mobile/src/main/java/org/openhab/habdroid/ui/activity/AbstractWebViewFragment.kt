@@ -258,6 +258,7 @@ abstract class AbstractWebViewFragment :
         super.onResume()
         webView?.onResume()
         webView?.resumeTimers()
+        pushAppMenu()
         if (lockDrawer) {
             mainActivity?.setDrawerLocked(true)
         }
@@ -399,6 +400,22 @@ abstract class AbstractWebViewFragment :
         }
     }
 
+    /**
+     * Hand the app's menu entries to Main UI, which shows them in its own sidebar.
+     * No-op for web UIs (or Main UI versions) which don't support that.
+     */
+    private fun pushAppMenu() {
+        val menu = mainActivity?.buildAppMenu() ?: return
+        webView?.evaluateJavascript(
+            "if (window.MainUI && typeof window.MainUI.setAppMenu === 'function') window.MainUI.setAppMenu($menu)",
+            null
+        )
+    }
+
+    private fun handleAppMenuItem(id: String) {
+        mainActivity?.onAppMenuItemSelected(id)
+    }
+
     private fun hideActionBar() {
         wantsActionBar = false
         callback?.updateActionBarState()
@@ -426,6 +443,22 @@ abstract class AbstractWebViewFragment :
             Log.d(TAG, "exitToApp()")
             fragment.launch {
                 fragment.closeFragment()
+            }
+        }
+
+        @JavascriptInterface
+        fun menuReady() {
+            Log.d(TAG, "menuReady()")
+            fragment.launch {
+                fragment.pushAppMenu()
+            }
+        }
+
+        @JavascriptInterface
+        fun menuItemSelected(id: String) {
+            Log.d(TAG, "menuItemSelected($id)")
+            fragment.launch {
+                fragment.handleAppMenuItem(id)
             }
         }
 
