@@ -481,8 +481,13 @@ class MainActivity : AbstractBaseActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         CrashReportingHelper.d(TAG, "onPrepareOptionsMenu()")
-        menu.findItem(R.id.mainmenu_settings).isVisible =
-            controller.currentWebViewUi != null || prefs.getBoolean(PrefKeys.HIDE_DRAWER, false)
+        val hideDrawer = prefs.getBoolean(PrefKeys.HIDE_DRAWER, false)
+        menu.findItem(R.id.mainmenu_settings).isVisible = hideDrawer || controller.currentWebViewUi != null
+        // Without drawer its entries are offered here
+        menu.findItem(R.id.mainmenu_notifications).isVisible =
+            hideDrawer && drawerMenu.findItem(R.id.notifications).isVisible
+        menu.findItem(R.id.mainmenu_nfc).isVisible = hideDrawer && drawerMenu.findItem(R.id.nfc).isVisible
+        menu.findItem(R.id.mainmenu_about).isVisible = hideDrawer
         menu.findItem(R.id.mainmenu_voice_recognition).isVisible =
             connection != null &&
             SpeechRecognizer.isRecognitionAvailable(this)
@@ -514,6 +519,21 @@ class MainActivity : AbstractBaseActivity() {
         return when (item.itemId) {
             R.id.mainmenu_settings -> {
                 openSettings()
+                true
+            }
+
+            R.id.mainmenu_notifications -> {
+                openNotifications(null, false)
+                true
+            }
+
+            R.id.mainmenu_nfc -> {
+                startActivity(Intent(this, NfcItemPickerActivity::class.java))
+                true
+            }
+
+            R.id.mainmenu_about -> {
+                startActivity(Intent(this, AboutActivity::class.java))
                 true
             }
 
@@ -1186,7 +1206,13 @@ class MainActivity : AbstractBaseActivity() {
         Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
     )
 
-    private class PopupEntry(val serverId: Int, val serverName: String?, val ui: WebViewUi?, val titleRes: Int)
+    private class PopupEntry(
+        val serverId: Int,
+        val serverName: String?,
+        val title: String,
+        val ui: WebViewUi? = null,
+        val sitemap: Sitemap? = null
+    )
 
     /**
      * One entry per server and UI. What's installed is only known for the active server,
@@ -1205,11 +1231,17 @@ class MainActivity : AbstractBaseActivity() {
             mapOf(activeServerId to null)
         }
         return serverNames.flatMap { (serverId, serverName) ->
+            val isActive = serverId == activeServerId
             val uis = webViewUis.filter { (drawerItemId, ui, _) ->
-                if (serverId == activeServerId) drawerMenu.findItem(drawerItemId).isVisible else ui == WebViewUi.MAIN_UI
+                if (isActive) drawerMenu.findItem(drawerItemId).isVisible else ui == WebViewUi.MAIN_UI
             }
-            listOf(PopupEntry(serverId, serverName, null, R.string.mainmenu_openhab_sitemaps)) +
-                uis.map { (_, ui, titleRes) -> PopupEntry(serverId, serverName, ui, titleRes) }
+            val sitemaps = if (isActive) serverProperties?.sitemaps.orEmpty() else emptyList()
+            val sitemapEntries = if (sitemaps.isEmpty()) {
+                listOf(PopupEntry(serverId, serverName, getString(R.string.mainmenu_openhab_sitemaps)))
+            } else {
+                sitemaps.map { sitemap -> PopupEntry(serverId, serverName, sitemap.label, sitemap = sitemap) }
+            }
+            sitemapEntries + uis.map { (_, ui, titleRes) -> PopupEntry(serverId, serverName, getString(titleRes), ui) }
         }
     }
 
@@ -1222,10 +1254,12 @@ class MainActivity : AbstractBaseActivity() {
         val popup = PopupMenu(this, anchor)
         MenuCompat.setGroupDividerEnabled(popup.menu, true)
         entries.forEachIndexed { index, entry ->
-            val uiName = getString(entry.titleRes)
-            val title = if (entry.serverName != null) "${entry.serverName} \u00b7 $uiName" else uiName
-            val isCurrent = entry.serverId == activeServerId &&
-                if (entry.ui == null) controller.isShowingSitemap else entry.ui == currentUi
+            val title = if (entry.serverName != null) "${entry.serverName} \u00b7 ${entry.title}" else entry.title
+            val isCurrent = entry.serverId == activeServerId && when {
+                entry.ui != null -> entry.ui == currentUi
+                entry.sitemap != null -> controller.isShowingSitemap && entry.sitemap == controller.currentSitemap
+                else -> controller.isShowingSitemap
+            }
             popup.menu.add(serverIds.indexOf(entry.serverId), index, index, title.highlightIf(isCurrent))
         }
 
@@ -1241,9 +1275,12 @@ class MainActivity : AbstractBaseActivity() {
                     updateServerNameInDrawer()
                 }
 
-                entry.ui == null && currentUi != null -> controller.closeFragment()
-
                 entry.ui != null && entry.ui != currentUi -> openWebViewUi(entry.ui, true, null)
+
+                entry.sitemap != null && entry.sitemap != controller.currentSitemap ->
+                    controller.openSitemap(entry.sitemap)
+
+                entry.ui == null && !controller.isShowingSitemap -> controller.closeFragment()
             }
             true
         }
