@@ -1316,6 +1316,8 @@ class MainActivity : AbstractBaseActivity() {
         }
     } else {
         this
+    }
+
     /**
      * The app's entries for Main UI's sidebar as JSON, see OHApp.d.ts in openhab-webui
      */
