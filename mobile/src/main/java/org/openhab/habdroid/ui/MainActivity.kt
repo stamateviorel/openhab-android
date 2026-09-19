@@ -201,6 +201,8 @@ class MainActivity : AbstractBaseActivity() {
     private val preferenceActivityCallback =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             CrashReportingHelper.d(TAG, "preferenceActivityCallback: $result")
+            updateTitle()
+            invalidateOptionsMenu()
             val data = result.data ?: return@registerForActivityResult
             if (data.getBooleanExtra(PreferencesActivity.RESULT_EXTRA_SITEMAP_CLEARED, false)) {
                 updateSitemapDrawerEntries()
@@ -479,6 +481,8 @@ class MainActivity : AbstractBaseActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         CrashReportingHelper.d(TAG, "onPrepareOptionsMenu()")
+        menu.findItem(R.id.mainmenu_settings).isVisible =
+            controller.currentWebViewUi != null || prefs.getBoolean(PrefKeys.HIDE_DRAWER, false)
         menu.findItem(R.id.mainmenu_voice_recognition).isVisible =
             connection != null &&
             SpeechRecognizer.isRecognitionAvailable(this)
@@ -508,6 +512,11 @@ class MainActivity : AbstractBaseActivity() {
 
         // Handle menu items
         return when (item.itemId) {
+            R.id.mainmenu_settings -> {
+                openSettings()
+                true
+            }
+
             R.id.mainmenu_voice_recognition -> {
                 launchVoiceRecognition()
                 true
@@ -1134,7 +1143,7 @@ class MainActivity : AbstractBaseActivity() {
         drawerHeaderBinding.serverSelector.setOnClickListener { updateDrawerMode(!inServerSelectionMode) }
     }
 
-    fun openSettings() {
+    private fun openSettings() {
         val settingsIntent = Intent(this, PreferencesActivity::class.java)
         settingsIntent.putExtra(PreferencesActivity.START_EXTRA_SERVER_PROPERTIES, serverProperties)
         preferenceActivityCallback.launch(settingsIntent)
@@ -1168,7 +1177,8 @@ class MainActivity : AbstractBaseActivity() {
         val uiTitle = webViewUis.firstOrNull { (_, ui, _) -> ui == currentUi }
             ?.let { (_, _, titleRes) -> getString(titleRes) }
             ?: controller.currentTitle
-        titleButton.text = listOfNotNull(serverName, uiTitle?.toString().orEmpty().ifEmpty { null })
+        val titleParts = listOf(serverName, uiTitle?.toString(), controller.currentWebViewPageTitle)
+        titleButton.text = titleParts.filterNot { part -> part.isNullOrEmpty() }
             .joinToString(" \u00b7 ")
             .ifEmpty { getString(R.string.app_name) }
         titleButton.isClickable = hasChoice
@@ -1553,13 +1563,13 @@ class MainActivity : AbstractBaseActivity() {
 
     private fun openNotifications(highlightedId: String?, primaryServer: Boolean) {
         controller.openNotifications(highlightedId, primaryServer)
-        drawerToggle.isDrawerIndicatorEnabled = false
+        updateNavigationIcon(false)
     }
 
     private fun openWebViewUi(ui: WebViewUi, isStackRoot: Boolean, subpage: String?) {
         hideSnackbar(SNACKBAR_TAG_SSE_ERROR)
         controller.showWebViewUi(ui, isStackRoot, subpage)
-        drawerToggle.isDrawerIndicatorEnabled = isStackRoot
+        updateNavigationIcon(isStackRoot)
     }
 
     private fun buildUrlAndOpenSitemap(partUrl: String) {
@@ -1575,7 +1585,17 @@ class MainActivity : AbstractBaseActivity() {
         val title = controller.currentTitle
         val activeServerName = ServerConfiguration.load(prefs, getSecretPrefs(), prefs.getActiveServerId())?.name
         setTitle(title.orDefaultIfEmpty(activeServerName.orEmpty()).orDefaultIfEmpty(getString(R.string.app_name)))
-        drawerToggle.isDrawerIndicatorEnabled = !controller.canGoBack()
+        updateNavigationIcon(!controller.canGoBack())
+    }
+
+    private fun updateNavigationIcon(isRoot: Boolean) {
+        val hideDrawer = prefs.getBoolean(PrefKeys.HIDE_DRAWER, false)
+        binding.drawerContainer.setDrawerLockMode(
+            if (hideDrawer) DrawerLayout.LOCK_MODE_LOCKED_CLOSED else DrawerLayout.LOCK_MODE_UNLOCKED
+        )
+        drawerToggle.isDrawerIndicatorEnabled = isRoot && !hideDrawer
+        // Without drawer there's no navigation icon on root pages
+        supportActionBar?.setDisplayHomeAsUpEnabled(!isRoot || !hideDrawer)
     }
 
     fun setProgressIndicatorVisible(visible: Boolean) {
