@@ -1236,7 +1236,9 @@ class MainActivity : AbstractBaseActivity() {
                 if (isActive) drawerMenu.findItem(drawerItemId).isVisible else ui == WebViewUi.MAIN_UI
             }
             val sitemaps = if (isActive) serverProperties?.sitemaps.orEmpty() else emptyList()
-            val sitemapEntries = if (sitemaps.isEmpty()) {
+            val sitemapEntries = if (isActive && serverProperties != null && sitemaps.isEmpty()) {
+                emptyList()
+            } else if (sitemaps.isEmpty()) {
                 listOf(PopupEntry(serverId, serverName, getString(R.string.mainmenu_openhab_sitemaps)))
             } else {
                 sitemaps.map { sitemap -> PopupEntry(serverId, serverName, sitemap.label, sitemap = sitemap) }
