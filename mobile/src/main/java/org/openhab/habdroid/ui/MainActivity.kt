@@ -1252,7 +1252,7 @@ class MainActivity : AbstractBaseActivity() {
 
                 entry.ui == null && currentUi != null -> controller.closeFragment()
 
-                entry.ui != null && entry.ui != currentUi -> openWebViewUi(entry.ui, false, null)
+                entry.ui != null && entry.ui != currentUi -> openWebViewUi(entry.ui, true, null)
             }
             true
         }
