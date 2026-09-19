@@ -180,6 +180,14 @@ class MainActivity : AbstractBaseActivity() {
 
     private var pendingAction: PendingAction? = null
     private lateinit var titleButton: MaterialButton
+    private var serverConfigs = emptyList<ServerConfiguration>()
+
+    // Drawer item, UI and title
+    private val webViewUis = listOf(
+        Triple(R.id.main_ui, WebViewUi.MAIN_UI, R.string.mainmenu_openhab_main_ui),
+        Triple(R.id.habpanel, WebViewUi.HABPANEL, R.string.mainmenu_openhab_habpanel),
+        Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
+    )
     private lateinit var controller: ContentController
     var serverProperties: ServerProperties? = null
         private set
@@ -1181,8 +1189,7 @@ class MainActivity : AbstractBaseActivity() {
         titleButton = layoutInflater.inflate(R.layout.toolbar_title_button, toolbar, false) as MaterialButton
         titleButton.setOnClickListener { v -> showServerPopup(v) }
         toolbar.addView(titleButton)
-        // The button replaces the title. Once set explicitly, the toolbar doesn't follow the activity title anymore.
-        supportActionBar?.title = ""
+        supportActionBar?.setDisplayShowTitleEnabled(false)
         updateTitleButton()
     }
 
@@ -1195,11 +1202,8 @@ class MainActivity : AbstractBaseActivity() {
 
     private fun updateTitleButton() {
         val hasChoice = buildPopupEntries().size > 1
-        val serverName = if (connection is DemoConnection) {
-            null
-        } else {
-            ServerConfiguration.load(prefs, getSecretPrefs(), prefs.getActiveServerId())?.name
-        }
+        val activeServerId = prefs.getActiveServerId()
+        val serverName = serverConfigs.firstOrNull { config -> config.id == activeServerId }?.name
         val currentUi = controller.currentWebViewUi
         val uiTitle = webViewUis.firstOrNull { (_, ui, _) -> ui == currentUi }
             ?.let { (_, _, titleRes) -> getString(titleRes) }
@@ -1216,12 +1220,6 @@ class MainActivity : AbstractBaseActivity() {
         }
     }
 
-    private val webViewUis = listOf(
-        Triple(R.id.main_ui, WebViewUi.MAIN_UI, R.string.mainmenu_openhab_main_ui),
-        Triple(R.id.habpanel, WebViewUi.HABPANEL, R.string.mainmenu_openhab_habpanel),
-        Triple(R.id.frontail, WebViewUi.FRONTAIL, R.string.mainmenu_openhab_frontail)
-    )
-
     private class PopupEntry(
         val serverId: Int,
         val serverName: String?,
@@ -1236,13 +1234,8 @@ class MainActivity : AbstractBaseActivity() {
      */
     private fun buildPopupEntries(): List<PopupEntry> {
         val activeServerId = prefs.getActiveServerId()
-        val configs = if (connection is DemoConnection) {
-            emptyList()
-        } else {
-            prefs.getConfiguredServerIds().mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
-        }
-        val serverNames = if (configs.size > 1) {
-            configs.associate { config -> config.id to config.name }
+        val serverNames = if (serverConfigs.size > 1) {
+            serverConfigs.associate { config -> config.id to config.name }
         } else {
             mapOf(activeServerId to null)
         }
@@ -1321,10 +1314,12 @@ class MainActivity : AbstractBaseActivity() {
 
         // Add new items
         if (connection is DemoConnection) {
+            serverConfigs = emptyList()
             drawerHeaderBinding.drawerModeSwitcher.isGone = true
         } else {
             val configs = prefs.getConfiguredServerIds()
                 .mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
+            serverConfigs = configs
             configs.forEachIndexed { index, config -> drawerMenu.add(R.id.servers, config.id, index, config.name) }
             drawerHeaderBinding.drawerModeSwitcher.isGone = configs.size <= 1
         }
