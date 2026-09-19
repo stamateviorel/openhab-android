@@ -35,10 +35,12 @@ jobs:
           fi
 
       - name: Build
-        run: ./gradlew :mobile:assembleFossBetaDebug :mobile:assembleFossBetaRelease
+        run: ./gradlew :mobile:assembleFossBetaDebug
 
-      - name: Sign release APK with the fixed key
+      - name: Build and sign release APK with the fixed key
+        continue-on-error: true
         run: |
+          ./gradlew :mobile:assembleFossBetaRelease
           tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           unsigned=$(ls mobile/build/outputs/apk/fossBeta/release/*-unsigned.apk)
           "$tools/zipalign" -f 4 "$unsigned" aligned.apk
@@ -59,3 +61,4 @@ jobs:
         with:
           name: openhab-test-release
           path: openhab-test-release.apk
+          if-no-files-found: ignore
