@@ -1,0 +1,64 @@
+name: Test APK
+
+on:
+  push:
+    branches:
+      - test-apk-2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'adopt'
+          java-version: 17
+          cache: gradle
+
+      - name: Use fixed debug key
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          # AGP resolves the .android folder below XDG_CONFIG_HOME on the runners
+          if [ -n "$DEBUG_KEYSTORE_B64" ]; then
+            for dir in "$HOME/.android" "${XDG_CONFIG_HOME:-$HOME/.config}/.android"; do
+              mkdir -p "$dir"
+              echo "$DEBUG_KEYSTORE_B64" | base64 -d > "$dir/debug.keystore"
+            done
+          fi
+
+      - name: Build
+        run: ./gradlew :mobile:assembleFossBetaDebug
+
+      - name: Build and sign release APK with the fixed key
+        continue-on-error: true
+        run: |
+          ./gradlew :mobile:assembleFossBetaRelease
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          unsigned=$(ls mobile/build/outputs/apk/fossBeta/release/*-unsigned.apk)
+          "$tools/zipalign" -f 4 "$unsigned" aligned.apk
+          "$tools/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android \
+            --ks-key-alias androiddebugkey --key-pass pass:android --out openhab-test-release.apk aligned.apk
+          "$tools/apksigner" verify --print-certs openhab-test-release.apk | grep SHA-256
+
+      - name: Show signing key
+        run: |
+          keytool -printcert -jarfile mobile/build/outputs/apk/fossBeta/debug/*.apk | grep -E "Valid from|SHA256:"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openhab-foss-beta-debug
+          path: mobile/build/outputs/apk/fossBeta/debug/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openhab-test-release
+          path: openhab-test-release.apk
+          if-no-files-found: ignore
