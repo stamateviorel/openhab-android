@@ -12,6 +12,33 @@
         android:layout_height="match_parent"
         tools:visibility="gone" />
 
+    <FrameLayout
+        android:id="@+id/loading_logo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="?colorSurface"
+        android:visibility="gone">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_gravity="center"
+            android:alpha="0.15"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_openhab_appicon_340dp"
+            app:tint="?colorOnSurfaceVariant"
+            app:tintMode="src_in" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/loading_logo_fill"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:src="@drawable/loading_logo_fill" />
+
+    </FrameLayout>
+
     <com.google.android.material.progressindicator.LinearProgressIndicator
         android:id="@+id/progress"
         android:layout_width="match_parent"

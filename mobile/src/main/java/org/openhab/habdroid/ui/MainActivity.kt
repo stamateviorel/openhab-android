@@ -1151,21 +1151,25 @@ class MainActivity : AbstractBaseActivity() {
      */
     fun buildAppMenu(): String {
         val items = JSONArray()
-        fun add(id: String, title: CharSequence?, icon: String, active: Boolean = false) {
+        fun add(id: String, title: CharSequence?, icon: String, label: String? = null, active: Boolean = false) {
             items.put(
                 JSONObject()
                     .put("id", id)
                     .put("title", title.toString())
                     .put("icon", icon)
+                    .put("label", label)
                     .put("active", active)
             )
         }
-        fun addIfInDrawer(drawerItemId: Int, id: String, icon: String) {
+        fun addIfInDrawer(drawerItemId: Int, id: String, icon: String, label: String? = null) {
             val drawerItem = drawerMenu.findItem(drawerItemId)
             if (drawerItem.isVisible) {
-                add(id, drawerItem.title, icon)
+                add(id, drawerItem.title, icon, label)
             }
         }
+        val serverLabel = getString(R.string.app_menu_label_server)
+        val sitemapLabel = getString(R.string.app_menu_label_sitemap)
+        val webUiLabel = getString(R.string.app_menu_label_web_ui)
 
         if (connection !is DemoConnection) {
             val activeServerId = prefs.getActiveServerId()
@@ -1173,24 +1177,25 @@ class MainActivity : AbstractBaseActivity() {
                 .mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
             if (configs.size > 1) {
                 configs.forEach { config ->
-                    add("$APP_MENU_SERVER_PREFIX${config.id}", config.name, "material:dns", config.id == activeServerId)
+                    val id = "$APP_MENU_SERVER_PREFIX${config.id}"
+                    add(id, config.name, "material:dns", serverLabel, config.id == activeServerId)
                 }
             }
         }
         serverProperties?.sitemaps
             ?.sortedWithDefaultName(prefs.getDefaultSitemap(connection)?.name.orEmpty())
             ?.forEach { sitemap ->
-                add("$APP_MENU_SITEMAP_PREFIX${sitemap.name}", sitemap.label, "material:view_list")
+                add("$APP_MENU_SITEMAP_PREFIX${sitemap.name}", sitemap.label, "material:view_list", sitemapLabel)
             }
-        addIfInDrawer(R.id.habpanel, APP_MENU_HABPANEL, "material:dashboard")
+        addIfInDrawer(R.id.habpanel, APP_MENU_HABPANEL, "material:dashboard", webUiLabel)
         addIfInDrawer(R.id.notifications, APP_MENU_NOTIFICATIONS, "material:notifications")
-        addIfInDrawer(R.id.frontail, APP_MENU_FRONTAIL, "material:format_align_left")
+        addIfInDrawer(R.id.frontail, APP_MENU_FRONTAIL, "material:format_align_left", webUiLabel)
         addIfInDrawer(R.id.nfc, APP_MENU_NFC, "material:nfc")
         addIfInDrawer(R.id.settings, APP_MENU_SETTINGS, "material:settings")
         addIfInDrawer(R.id.about, APP_MENU_ABOUT, "material:info_outline")
 
         return JSONObject()
-            .put("title", getString(R.string.app_name))
+            .put("title", getString(R.string.app_menu_title))
             .put("items", items)
             .toString()
     }
