@@ -1150,46 +1150,62 @@ class MainActivity : AbstractBaseActivity() {
      * Same entries, order and titles as in the drawer.
      */
     fun buildAppMenu(): String {
+        fun item(id: String, title: CharSequence?, icon: String, footer: String? = null, active: Boolean = false) =
+            JSONObject()
+                .put("id", id)
+                .put("title", title.toString())
+                .put("icon", icon)
+                .put("footer", footer)
+                .put("active", active)
+
         val items = JSONArray()
-        fun add(id: String, title: CharSequence?, icon: String, label: String? = null, active: Boolean = false) {
-            items.put(
-                JSONObject()
-                    .put("id", id)
-                    .put("title", title.toString())
-                    .put("icon", icon)
-                    .put("label", label)
-                    .put("active", active)
-            )
-        }
-        fun addIfInDrawer(drawerItemId: Int, id: String, icon: String, label: String? = null) {
+        fun addIfInDrawer(drawerItemId: Int, id: String, icon: String, footer: String? = null) {
             val drawerItem = drawerMenu.findItem(drawerItemId)
             if (drawerItem.isVisible) {
-                add(id, drawerItem.title, icon, label)
+                items.put(item(id, drawerItem.title, icon, footer))
             }
         }
-        val serverLabel = getString(R.string.app_menu_label_server)
-        val sitemapLabel = getString(R.string.app_menu_label_sitemap)
-        val webUiLabel = getString(R.string.app_menu_label_web_ui)
 
         if (connection !is DemoConnection) {
             val activeServerId = prefs.getActiveServerId()
             val configs = prefs.getConfiguredServerIds()
                 .mapNotNull { id -> ServerConfiguration.load(prefs, getSecretPrefs(), id) }
             if (configs.size > 1) {
+                val servers = JSONArray()
                 configs.forEach { config ->
                     val id = "$APP_MENU_SERVER_PREFIX${config.id}"
-                    add(id, config.name, "material:dns", serverLabel, config.id == activeServerId)
+                    servers.put(item(id, config.name, "material:dns", active = config.id == activeServerId))
                 }
+                val activeName = configs.firstOrNull { config -> config.id == activeServerId }?.name
+                items.put(
+                    item(APP_MENU_SERVERS, getString(R.string.app_menu_servers), "material:dns", activeName)
+                        .put("children", servers)
+                )
             }
         }
-        serverProperties?.sitemaps
+
+        val sitemapKind = getString(R.string.app_menu_kind_sitemap)
+        val sitemaps = serverProperties?.sitemaps
             ?.sortedWithDefaultName(prefs.getDefaultSitemap(connection)?.name.orEmpty())
-            ?.forEach { sitemap ->
-                add("$APP_MENU_SITEMAP_PREFIX${sitemap.name}", sitemap.label, "material:view_list", sitemapLabel)
+            .orEmpty()
+        if (sitemaps.size == 1) {
+            val sitemap = sitemaps.first()
+            items.put(item("$APP_MENU_SITEMAP_PREFIX${sitemap.name}", sitemap.label, "material:view_list", sitemapKind))
+        } else if (sitemaps.isNotEmpty()) {
+            val children = JSONArray()
+            sitemaps.forEach { sitemap ->
+                children.put(item("$APP_MENU_SITEMAP_PREFIX${sitemap.name}", sitemap.label, "material:view_list"))
             }
-        addIfInDrawer(R.id.habpanel, APP_MENU_HABPANEL, "material:dashboard", webUiLabel)
+            items.put(
+                item(APP_MENU_SITEMAPS, getString(R.string.mainmenu_openhab_sitemaps), "material:view_list")
+                    .put("children", children)
+            )
+        }
+
+        val webUiKind = getString(R.string.app_menu_kind_web_ui)
+        addIfInDrawer(R.id.habpanel, APP_MENU_HABPANEL, "material:dashboard", webUiKind)
         addIfInDrawer(R.id.notifications, APP_MENU_NOTIFICATIONS, "material:notifications")
-        addIfInDrawer(R.id.frontail, APP_MENU_FRONTAIL, "material:format_align_left", webUiLabel)
+        addIfInDrawer(R.id.frontail, APP_MENU_FRONTAIL, "material:format_align_left", webUiKind)
         addIfInDrawer(R.id.nfc, APP_MENU_NFC, "material:nfc")
         addIfInDrawer(R.id.settings, APP_MENU_SETTINGS, "material:settings")
         addIfInDrawer(R.id.about, APP_MENU_ABOUT, "material:info_outline")
@@ -1908,6 +1924,8 @@ class MainActivity : AbstractBaseActivity() {
         const val SNACKBAR_TAG_SERVER_MISSING = "serverMissing"
         const val SNACKBAR_TAG_SWITCHED_SERVER = "switchedServer"
 
+        private const val APP_MENU_SERVERS = "servers"
+        private const val APP_MENU_SITEMAPS = "sitemaps"
         private const val APP_MENU_SERVER_PREFIX = "server:"
         private const val APP_MENU_SITEMAP_PREFIX = "sitemap:"
         private const val APP_MENU_HABPANEL = "habpanel"
