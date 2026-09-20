@@ -13,6 +13,7 @@
 
 package org.openhab.habdroid.ui.activity
 
+import android.animation.ObjectAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -92,6 +93,8 @@ abstract class AbstractWebViewFragment :
         private set
     var wantsActionBar = true
         private set
+    private var initialLoadDone = false
+    private var logoAnimator: ObjectAnimator? = null
 
     private val permissionRequester = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -180,6 +183,7 @@ abstract class AbstractWebViewFragment :
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                     Log.d(TAG, "progressCallback: progress = $newProgress")
                     if (newProgress == 100) {
+                        initialLoadDone = true
                         updateViewVisibility(null, null)
                     } else {
                         updateViewVisibility(null, newProgress)
@@ -250,6 +254,7 @@ abstract class AbstractWebViewFragment :
 
     override fun onDestroyView() {
         super.onDestroyView()
+        logoAnimator?.cancel()
         webView?.destroy()
         binding = null
     }
@@ -333,6 +338,8 @@ abstract class AbstractWebViewFragment :
             updateViewVisibility(true, null)
             return
         }
+        initialLoadDone = false
+        binding?.loadingLogoFill?.drawable?.level = 0
         updateViewVisibility(false, 0)
 
         val webView = webView ?: return
@@ -393,8 +400,18 @@ abstract class AbstractWebViewFragment :
             webView?.isVisible = !error
             binding?.empty?.isVisible = error
         }
+        // The logo is for the initial load of a page, later loads inside that page only get the progress bar
+        val showLogo = loadingProgress != null && !initialLoadDone
+        binding?.loadingLogo?.isVisible = showLogo
+        val logoFill = binding?.loadingLogoFill?.drawable
+        if (showLogo && logoFill != null) {
+            logoAnimator?.cancel()
+            logoAnimator = ObjectAnimator.ofInt(logoFill, "level", logoFill.level, (loadingProgress ?: 0) * 100)
+                .setDuration(LOGO_ANIMATION_DURATION_MS)
+                .also { it.start() }
+        }
         binding?.progress?.apply {
-            isVisible = loadingProgress != null
+            isVisible = loadingProgress != null && !showLogo
             progress = loadingProgress ?: 0
         }
     }
@@ -473,6 +490,8 @@ abstract class AbstractWebViewFragment :
             .filter { (_, perms) -> perms.all { perm -> androidPermissions.contains(perm) } }
             .keys
             .toTypedArray()
+
+        private const val LOGO_ANIMATION_DURATION_MS = 200L
 
         private const val KEY_CURRENT_URL = "url"
         const val KEY_IS_STACK_ROOT = "is_stack_root"
