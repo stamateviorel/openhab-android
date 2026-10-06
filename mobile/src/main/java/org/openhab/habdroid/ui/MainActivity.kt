@@ -562,7 +562,7 @@ class MainActivity : AbstractBaseActivity() {
             when {
                 binding.drawerContainer.isDrawerOpen(binding.leftDrawer) -> binding.drawerContainer.closeDrawers()
 
-                controller.canGoBack() -> controller.goBack()
+                controller.canHandleBackKey() -> controller.goBack()
 
                 isFullscreenEnabled -> when {
                     lastSnackbar?.isShown != true -> showSnackbar(
@@ -1089,6 +1089,10 @@ class MainActivity : AbstractBaseActivity() {
                 }
 
                 R.id.main_ui -> {
+                    // Picked by hand, so the front page itself and not the pages put back after a restart
+                    prefs.edit {
+                        remove(PrefKeys.buildServerKey(prefs.getActiveServerId(), PrefKeys.BRIDGE_ROUTE_PREFIX))
+                    }
                     openWebViewUi(WebViewUi.MAIN_UI, false, null)
                     handled = true
                 }

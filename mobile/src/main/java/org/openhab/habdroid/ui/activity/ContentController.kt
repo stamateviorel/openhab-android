@@ -427,6 +427,10 @@ abstract class ContentController protected constructor(private val activity: Mai
         connectionFragment.triggerUpdate(pageUrl, forceReload)
     }
 
+    // Like canGoBack(), which also decides the up arrow, plus the page's own history for the back key
+    fun canHandleBackKey(): Boolean =
+        (temporaryPage as? AbstractWebViewFragment)?.canGoBackInPage() == true || canGoBack()
+
     /**
      * Checks whether the controller currently can consume the back key
      *

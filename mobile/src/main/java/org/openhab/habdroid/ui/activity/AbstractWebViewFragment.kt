@@ -367,7 +367,7 @@ abstract class AbstractWebViewFragment :
     fun goBack(): Boolean {
         // With the bridge, Main UI decides what back means (close a popup, previous page, ...)
         if (bridgeActive()) {
-            if (!bridgeCanGoBack()) {
+            if (!canGoBackInPage()) {
                 return false
             }
             bridge?.back()
@@ -394,6 +394,10 @@ abstract class AbstractWebViewFragment :
     // Only what the page shows: a back button in its bar, or an open popup. The history isn't a signal,
     // Main UI's home page can have the root route behind it without showing a back button.
     private fun bridgeCanGoBack() = bridgeNavbar?.hasBack == true || bridgeNav?.modal == true
+
+    // The back key also walks the page's own history, like the browser does: a page opened from the
+    // sidebar shows a hamburger, but the front page is still behind it
+    fun canGoBackInPage() = bridgeActive() && (bridgeCanGoBack() || (bridgeNav?.history?.size ?: 0) > 1)
 
     private fun loadWebsite(urlToLoad: String = this.urlToLoad) {
         val conn = requireContext().getConnectionFactory().currentActive?.usableConnection
