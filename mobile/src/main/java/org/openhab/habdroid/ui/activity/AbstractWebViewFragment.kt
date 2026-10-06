@@ -16,6 +16,7 @@ package org.openhab.habdroid.ui.activity
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -75,6 +76,7 @@ import org.openhab.habdroid.ui.bridge.BridgeHello
 import org.openhab.habdroid.ui.bridge.BridgeMenuSection
 import org.openhab.habdroid.ui.bridge.BridgeNavState
 import org.openhab.habdroid.ui.bridge.BridgeNavbarState
+import org.openhab.habdroid.ui.bridge.IconFontDrawable
 import org.openhab.habdroid.ui.bridge.MainUiBridge
 import org.openhab.habdroid.ui.setUpForConnection
 import org.openhab.habdroid.util.PrefKeys
@@ -87,6 +89,7 @@ import org.openhab.habdroid.util.getWebViewManager
 import org.openhab.habdroid.util.hasPermissions
 import org.openhab.habdroid.util.isDarkModeActive
 import org.openhab.habdroid.util.orDefaultIfEmpty
+import org.openhab.habdroid.util.resolveThemedColor
 import org.openhab.habdroid.util.toRelativeUrl
 
 abstract class AbstractWebViewFragment :
@@ -311,11 +314,16 @@ abstract class AbstractWebViewFragment :
             inflater.inflate(R.menu.webview_menu, menu)
         }
         bridgeActionIds.clear()
+        val context = requireContext()
+        val iconTint = ColorStateList.valueOf(context.resolveThemedColor(R.attr.colorControlNormal))
         bridgeNavbar?.actions?.forEachIndexed { index, action ->
             val id = BRIDGE_ACTION_ID_BASE + index
             bridgeActionIds[id] = action.id
+            // An icon-only page button carries its glyph name as label; the glyph is what to show
+            val iconName = action.icon?.md ?: action.icon?.name
             menu.add(Menu.NONE, id, index, action.label).apply {
                 isEnabled = !action.disabled
+                icon = iconName?.let { IconFontDrawable.create(context, it, iconTint) }
                 setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             }
         }
