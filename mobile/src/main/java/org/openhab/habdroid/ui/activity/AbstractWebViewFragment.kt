@@ -506,6 +506,13 @@ abstract class AbstractWebViewFragment :
 
     override fun onBridgeHello(hello: BridgeHello) {
         Log.d(TAG, "Bridge: ${hello.impl} ${hello.version.orEmpty()} accepted ${hello.accepted}")
+        // Test only: answer the question whether Android's OHBridge object takes the extra 'info' property
+        webView?.evaluateJavascript(
+            "String(!!(window.OHBridge && window.OHBridge.info && window.OHBridge.info === window.OHBridgeInfo))"
+        ) { result ->
+            Log.d(TAG, "Bridge: info attached to OHBridge = $result")
+            context?.getPrefs()?.edit { putString("bridge_info_attached", result) }
+        }
         if ("navbar" !in hello.accepted) {
             bridgeNavbar = null
             requireActivity().invalidateMenu()
