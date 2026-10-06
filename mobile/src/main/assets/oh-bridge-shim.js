@@ -508,6 +508,9 @@
   var restoring = false
 
   function isAppRoot() {
+    // Logging in comes back to the front page as /?code=...&state=..., which Main UI reads from
+    // the address itself; replacing it here would lose the login.
+    if (location.search) return false
     var path = location.pathname
     return path === BASE || path === BASE + '/'
   }
