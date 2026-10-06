@@ -41,6 +41,7 @@ import com.google.android.material.color.DynamicColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import org.openhab.habdroid.BuildConfig
 import org.openhab.habdroid.R
 import org.openhab.habdroid.background.tiles.AbstractTileService
 import org.openhab.habdroid.background.tiles.getTileData
@@ -207,6 +208,10 @@ class MainSettingsFragment : AbstractSettingsFragment() {
             parentActivity.addResultFlag(PreferencesActivity.RESULT_EXTRA_SHOW_ICONS_CHANGED)
             true
         }
+
+        getPreference(PrefKeys.MAIN_UI_BRIDGE).summary = getString(R.string.settings_main_ui_bridge_summary) +
+            " (build " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+            .format(java.util.Date(BuildConfig.TIMESTAMP)) + ")"
 
         getPreference(PrefKeys.CLEAR_CACHE).setOnPreferenceClickListener { pref ->
             clearCaches(pref.context)
