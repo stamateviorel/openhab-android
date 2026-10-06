@@ -275,6 +275,8 @@ abstract class ContentController protected constructor(private val activity: Mai
         }
     }
 
+    val currentWebViewFragment get() = temporaryPage as? AbstractWebViewFragment
+
     fun showWebViewUi(ui: WebViewUi, isStackRoot: Boolean, subpage: String?) {
         val webViewFragment = ui.fragment.getDeclaredConstructor().newInstance()
         webViewFragment.arguments = Bundle().apply {
@@ -425,6 +427,10 @@ abstract class ContentController protected constructor(private val activity: Mai
         connectionFragment.triggerUpdate(pageUrl, forceReload)
     }
 
+    // Like canGoBack(), which also decides the up arrow, plus the page's own history for the back key
+    fun canHandleBackKey(): Boolean =
+        (temporaryPage as? AbstractWebViewFragment)?.canGoBackInPage() == true || canGoBack()
+
     /**
      * Checks whether the controller currently can consume the back key
      *
@@ -432,7 +438,9 @@ abstract class ContentController protected constructor(private val activity: Mai
      */
     fun canGoBack(): Boolean {
         val tempPageAsWebView = temporaryPage as? AbstractWebViewFragment
-        return if (tempPageAsWebView?.isStackRoot == true) {
+        // A page talking via the bridge shows a hamburger unless it has a back button itself, even if the
+        // fragment was opened above the sitemap: the back key still leads there via goBack()
+        return if (tempPageAsWebView?.isStackRoot == true || tempPageAsWebView?.isBridgeActive == true) {
             return tempPageAsWebView.canGoBack()
         } else {
             temporaryPage != null || !pageStack.empty()
