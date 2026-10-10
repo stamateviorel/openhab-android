@@ -319,9 +319,10 @@ abstract class AbstractWebViewFragment :
         bridgeNavbar?.actions?.forEachIndexed { index, action ->
             val id = BRIDGE_ACTION_ID_BASE + index
             bridgeActionIds[id] = action.id
-            // An icon-only page button carries its glyph name as label; the glyph is what to show
+            // An icon-only button has an empty label; its icon's name stands in where text is needed (overflow)
             val iconName = action.icon?.md ?: action.icon?.name
-            menu.add(Menu.NONE, id, index, action.label).apply {
+            val title = action.label.ifEmpty { iconName?.substringAfter(':')?.replace('_', ' ').orEmpty() }
+            menu.add(Menu.NONE, id, index, title).apply {
                 isEnabled = !action.disabled
                 icon = iconName?.let { IconFontDrawable.create(context, it, iconTint) }
                 setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)

@@ -25,8 +25,7 @@
   if (!bridge || window.__ohBridgeShim) return
   window.__ohBridgeShim = true
 
-  // Android: the object addWebMessageListener creates may not take extra properties, see README
-  var info = bridge.info || window.OHBridgeInfo || {}
+  var info = bridge.info || {}
   var config = window.OHBridgeShimConfig || {}
   var BASE = config.basePath || ''
   var SHIM_FEATURES = ['navbar', 'menu', 'routeRestore']
@@ -356,7 +355,8 @@
       }
       var icon = iconOf(el)
       if (!label && !icon) return
-      var action = { id: proxyIdOf(el), label: label || glyph }
+      // An icon-only button has no label. The icon's name is no label either: the host draws the icon.
+      var action = { id: proxyIdOf(el), label: label }
       if (icon) action.icon = icon
       if (el.classList.contains('disabled') || el.disabled) action.disabled = true
       ;(inRight ? state.trailing : state.leading).push(action)
@@ -534,8 +534,8 @@
   var restoring = false
 
   function isAppRoot() {
-    // Logging in comes back to the front page as /?code=...&state=..., which Main UI reads from
-    // the address itself; replacing it here would lose the login.
+    // Main UI's login comes back to the front page with ?code=…&state=… and reads them from the
+    // address. Replacing the address would lose them, so the login would never finish.
     if (location.search) return false
     var path = location.pathname
     return path === BASE || path === BASE + '/'
@@ -648,9 +648,10 @@
       if (!navigable(r, url)) continue
       var p
       try {
-        p = JSON.stringify(propsAt(r, i))
+        // A copy that is sure to survive being sent; a prop that can't be turned into JSON throws.
+        p = JSON.parse(JSON.stringify(propsAt(r, i)))
       } catch (e) {
-        p = '{}'
+        p = {}
       }
       if (stack.length && stack[stack.length - 1] === url) {
         props[props.length - 1] = p // same page twice, keep how it was last opened
@@ -674,11 +675,8 @@
     for (var i = 0; i < n; i++) {
       var p = {}
       var j = i - (n - k)
-      if (RESTORE_PROPS && j >= 0) {
-        try {
-          p = JSON.parse(RESTORE_PROPS[j]) || {}
-        } catch (e) {}
-      }
+      var saved = RESTORE_PROPS && j >= 0 ? RESTORE_PROPS[j] : null
+      if (saved && typeof saved === 'object') p = saved
       list.push(p)
     }
     r.propsHistory = list
