@@ -280,6 +280,7 @@ abstract class AbstractWebViewFragment :
         super.onDestroyView()
         bridge?.destroy()
         bridge = null
+        showToolbar(true)
         mainActivity?.setMainUiMenu(null)
         logoAnimator?.cancel()
         webView?.destroy()
@@ -316,12 +317,15 @@ abstract class AbstractWebViewFragment :
         bridgeActionIds.clear()
         val context = requireContext()
         val iconTint = ColorStateList.valueOf(context.resolveThemedColor(R.attr.colorControlNormal))
-        bridgeNavbar?.actions?.forEachIndexed { index, action ->
+        // A popup or an open search draws its own bar over the page; the page's buttons would act underneath it
+        val navbar = bridgeNavbar?.takeUnless { it.hidden }
+        navbar?.actions?.forEachIndexed { index, action ->
             val id = BRIDGE_ACTION_ID_BASE + index
             bridgeActionIds[id] = action.id
-            // An icon-only page button carries its glyph name as label; the glyph is what to show
+            // An icon-only button has an empty label; its icon's name stands in where text is needed (overflow)
             val iconName = action.icon?.md ?: action.icon?.name
-            menu.add(Menu.NONE, id, index, action.label).apply {
+            val title = action.label.ifEmpty { iconName?.substringAfter(':')?.replace('_', ' ').orEmpty() }
+            menu.add(Menu.NONE, id, index, title).apply {
                 isEnabled = !action.disabled
                 icon = iconName?.let { IconFontDrawable.create(context, it, iconTint) }
                 setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
@@ -527,6 +531,9 @@ abstract class AbstractWebViewFragment :
         }
         if ("navbar" !in hello.accepted) {
             bridgeNavbar = null
+            title = getString(titleRes)
+            showToolbar(true)
+            refreshToolbar()
             requireActivity().invalidateMenu()
         }
         if ("menu" !in hello.accepted) {
@@ -542,14 +549,22 @@ abstract class AbstractWebViewFragment :
 
     override fun onBridgeNavbarChanged(state: BridgeNavbarState) {
         bridgeNavbar = state
+        // The activity rebuilds the title on its own occasions too (page loaded, drawer closed), so it must find
+        // the page's title here, not in the action bar
+        title = state.title.ifEmpty { getString(titleRes) }
+        // A popup or an open search draws its own bar in the page
+        showToolbar(!state.hidden)
         refreshToolbar()
         requireActivity().invalidateMenu()
     }
 
-    /** Title and back arrow follow the page, the activity's own title update is only used for the arrow */
+    /** Title and back arrow follow the page */
     private fun refreshToolbar() {
         mainActivity?.updateTitle()
-        bridgeNavbar?.title?.takeIf { it.isNotEmpty() }?.let { mainActivity?.supportActionBar?.title = it }
+    }
+
+    private fun showToolbar(show: Boolean) {
+        mainActivity?.supportActionBar?.let { if (show) it.show() else it.hide() }
     }
 
     override fun onBridgeMenuChanged(sections: List<BridgeMenuSection>) {

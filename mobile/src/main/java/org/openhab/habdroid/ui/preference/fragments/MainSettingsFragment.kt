@@ -209,10 +209,10 @@ class MainSettingsFragment : AbstractSettingsFragment() {
             true
         }
 
+        val buildTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+            .format(java.util.Date(BuildConfig.TIMESTAMP))
         getPreference(PrefKeys.MAIN_UI_BRIDGE).summary = getString(R.string.settings_main_ui_bridge_summary) +
-            " (build " + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
-            .format(java.util.Date(BuildConfig.TIMESTAMP)) + ", info attached: " +
-            prefs.getString("bridge_info_attached", "unknown") + ")"
+            " (build $buildTime, info attached: " + prefs.getString("bridge_info_attached", "unknown") + ")"
 
         getPreference(PrefKeys.CLEAR_CACHE).setOnPreferenceClickListener { pref ->
             clearCaches(pref.context)

@@ -238,8 +238,9 @@ class MainUiBridge(private val context: Context, private val listener: Listener)
             return
         }
         proxy.postMessage(entry.json)
-        // Delivered but unanswered: the page took it before it could reply. Try again.
-        schedule(id, entry, ACKNOWLEDGEMENT_TIMEOUT_MS)
+        // No resend on a slow answer: a nav.back delivered twice goes back twice. The page answers in its own
+        // time; only a page that loads anew (next ui.hello) gets the message again, and the wait limit drops it.
+        schedule(id, entry, MAX_WAIT_MS)
     }
 
     private fun deliver(json: JSONObject) {
@@ -266,7 +267,11 @@ class MainUiBridge(private val context: Context, private val listener: Listener)
             .put("theme", "md")
             .put("layout", JSONObject().put("insets", JSONObject().put("top", 0).put("bottom", 0)))
         initialHistory?.takeIf { it.isNotEmpty() }?.let { info.put("initialHistory", JSONArray(it)) }
-        initialProps?.takeIf { it.isNotEmpty() }?.let { info.put("initialProps", JSONArray(it)) }
+        // Props travel as objects; the app keeps them as the JSON text it got
+        initialProps?.takeIf { it.isNotEmpty() }?.let { props ->
+            val objects = props.map { prop -> runCatching { JSONObject(prop) }.getOrDefault(JSONObject()) }
+            info.put("initialProps", JSONArray(objects))
+        }
         // Main UI's addresses hang off the base path, no trailing slash
         val basePath = url.encodedPath.trimEnd('/')
         return """
@@ -298,7 +303,6 @@ class MainUiBridge(private val context: Context, private val listener: Listener)
 
         private const val MAX_ATTEMPTS = 6
         private const val RETRY_DELAY_MS = 300L
-        private const val ACKNOWLEDGEMENT_TIMEOUT_MS = 750L
         private const val MAX_WAIT_MS = 30_000L
         private const val MAX_LOGGED_CHARS = 4000
 
