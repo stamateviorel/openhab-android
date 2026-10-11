@@ -259,14 +259,17 @@ class MainUiBridge(private val context: Context, private val listener: Listener)
     }
 
     private fun buildBootstrapScript(url: HttpUrl, initialHistory: List<String>?, initialProps: List<String>?): String {
+        // The toolbar sits above the web view, not over it: the page keeps no room for a bar
+        val layout = JSONObject()
+            .put("insets", JSONObject().put("top", 0).put("bottom", 0))
+            .put("navbarHeight", 0)
         val info = JSONObject()
             .put("protocol", 1)
             .put("platform", "android")
             .put("appVersion", context.packageManager.getPackageInfo(context.packageName, 0).versionName)
             .put("features", JSONArray(FEATURES))
             .put("theme", "md")
-            // The toolbar sits above the web view, not over it: the page keeps no room for a bar
-            .put("layout", JSONObject().put("insets", JSONObject().put("top", 0).put("bottom", 0)).put("navbarHeight", 0))
+            .put("layout", layout)
         initialHistory?.takeIf { it.isNotEmpty() }?.let { info.put("initialHistory", JSONArray(it)) }
         // Props travel as objects; the app keeps them as the JSON text it got
         initialProps?.takeIf { it.isNotEmpty() }?.let { props ->
