@@ -29,7 +29,7 @@
   var info = bridge.info || {}
   var config = window.OHBridgeShimConfig || {}
   var BASE = config.basePath || ''
-  var SHIM_FEATURES = ['navbar', 'menu', 'routeRestore']
+  var SHIM_FEATURES = ['navbar', 'menu', 'routeRestore', 'auth']
   var accepted = (info.features || []).filter(function (f) {
     return SHIM_FEATURES.indexOf(f) >= 0
   })
@@ -358,9 +358,10 @@
     Array.prototype.forEach.call(buttons, function (el) {
       var inRight = !!el.closest('.navbar-inner .right')
       var glyph = iconText(el)
-      // The right "Other Apps" panel button and the exit-to-app button: the host already does both.
+      // The right "Other Apps" panel button and the exit-to-app and pin-to-home buttons: the host
+      // already does these. The icons differ between the ios and md themes.
       if (inRight && el.classList.contains('panel-open')) return
-      if (inRight && glyph === 'square_arrow_right') return
+      if (inRight && HOST_GLYPHS.indexOf(glyph) >= 0) return
       // The left panel button opens the sidebar, which the host shows in its own menu.
       if (!inRight && el.classList.contains('panel-open') && wants('menu')) return
 
@@ -385,11 +386,14 @@
   }
 
   var lastNavbarJSON = null
+  var HOST_GLYPHS = ['square_arrow_right', 'exit_to_app', 'pin_fill', 'add_location']
 
-  // A popup or an expanded searchbar shows its own bar, so the host moves its bar out of the way,
-  // as Main UI does.
+  // A popup, an expanded card or an expanded searchbar shows its own bar, so the host moves its
+  // bar out of the way, as Main UI does.
   function barCovered() {
-    return !!document.querySelector('.popup.modal-in, .view-main .navbar.with-searchbar-expandable-enabled')
+    return !!document.querySelector(
+      '.popup.modal-in, .card-expandable.card-opened, .view-main .navbar.with-searchbar-expandable-enabled'
+    )
   }
 
   function reportNavbar() {
@@ -551,6 +555,58 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Signed-in user
+  // ---------------------------------------------------------------------------
+
+  // Main UI keeps who is signed in in its user store (Pinia, id 'user': `user` and `noAuth`).
+  function userStoreState() {
+    try {
+      var root = document.querySelector('#app')
+      var app = root && root.__vue_app__
+      var pinia = app && app.config.globalProperties.$pinia
+      return (pinia && pinia.state.value.user) || null
+    } catch (e) {
+      return null
+    }
+  }
+
+  // Versions without a store the shim can find show it in the sidebar: a button that signs in while
+  // nobody is, the user's name once somebody is. The roles are not shown; an administrator is who
+  // has the Settings entry.
+  function userFromSidebar() {
+    var panel = document.querySelector('.panel-left')
+    var account = panel && panel.querySelector('.account')
+    if (!account) return undefined
+    if (account.querySelector('.button')) return null
+    var name = account.querySelector('.item-title')
+    if (!name || !name.textContent.trim()) return undefined
+    var isAdmin = !!panel.querySelector('a[href="/settings/"]')
+    return { name: name.textContent.trim(), roles: isAdmin ? ['administrator'] : [] }
+  }
+
+  function readAuth() {
+    var state = userStoreState()
+    if (state) {
+      var user = state.user
+      return { user: user ? { name: user.name, roles: user.roles || [] } : null, noAuth: !!state.noAuth }
+    }
+    var fromSidebar = userFromSidebar()
+    return fromSidebar === undefined ? null : { user: fromSidebar, noAuth: false }
+  }
+
+  var lastAuthJSON = null
+
+  function reportAuth() {
+    if (!wants('auth') || !helloSent) return
+    var auth = readAuth()
+    if (!auth) return
+    var json = JSON.stringify(auth)
+    if (json === lastAuthJSON) return
+    lastAuthJSON = json
+    send('auth.state', auth)
+  }
+
+  // ---------------------------------------------------------------------------
   // Route capture and restore
   // ---------------------------------------------------------------------------
 
@@ -624,6 +680,8 @@
   function navigable(r, url) {
     var m = matchRoute(r, url)
     if (!m || isPopup(m)) return false
+    // A route that only redirects, like '/', is no page to go back to.
+    if (m.route.redirect) return false
     if (PROPS_ONLY.test(url.split('#')[0].split('?')[0])) return false
     return m.route.path !== '(.*)' // nothing real behind this address
   }
@@ -662,8 +720,35 @@
     return kept
   }
 
+  // Everything that can be open on top of the page, by Framework7 component.
+  var MODAL_KINDS = {
+    popup: '.popup.modal-in',
+    sheet: '.sheet-modal.modal-in',
+    popover: '.popover.modal-in',
+    actions: '.actions-modal.modal-in',
+    dialog: '.dialog.modal-in',
+    card: '.card-expandable.card-opened'
+  }
+  var MODAL_SELECTOR = Object.keys(MODAL_KINDS)
+    .map(function (kind) {
+      return MODAL_KINDS[kind]
+    })
+    .join(', ')
+
+  function openModals() {
+    return Array.prototype.slice.call(document.querySelectorAll(MODAL_SELECTOR))
+  }
+
   function isModalOpen() {
-    return !!document.querySelector('.popup.modal-in, .sheet-modal.modal-in, .popover.modal-in')
+    return openModals().length > 0
+  }
+
+  function closeModal(app, el) {
+    Object.keys(MODAL_KINDS).some(function (kind) {
+      if (!el.matches(MODAL_KINDS[kind]) || !app[kind]) return false
+      app[kind].close(el)
+      return true
+    })
   }
 
   function captureNav() {
@@ -762,7 +847,9 @@
   // goFullscreen, and reports its event stream through sseConnected. exitToApp and pinToHome are
   // left out on purpose: the host's own bar and menu cover them.
   var legacy = window.OHApp || {}
-  legacy.goFullscreen = function () {}
+  // Main UI only sets window.MainUI when goFullscreen exists. Keep the app's own goFullscreen
+  // unless the app draws the bar.
+  if (wants('navbar') || !legacy.goFullscreen) legacy.goFullscreen = function () {}
   legacy.sseConnected = function (connected) {
     send('connection.state', { sseConnected: !!connected })
   }
@@ -848,13 +935,20 @@
         r.navigate(p.path)
         return reply(id)
       case 'nav.back':
-        if (backEl && document.contains(backEl) && !backEl.classList.contains('back')) backEl.click()
+        // Close what is open on top first, as Main UI does.
+        var open = openModals().pop()
+        if (open) closeModal(r.app, open)
+        else if (backEl && document.contains(backEl) && !backEl.classList.contains('back')) backEl.click()
         else r.back()
         return reply(id)
       case 'nav.openModal':
         return legacyCommand(p.kind + ':' + p.target) ? reply(id) : fail(id, 'not_ready')
       case 'nav.closeModals':
-        return legacyCommand('close') ? reply(id) : fail(id, 'not_ready')
+        // Main UI's own close command misses popups opened by an address.
+        openModals().forEach(function (el) {
+          closeModal(r.app, el)
+        })
+        return reply(id)
       case 'nav.getState':
         return reply(id, captureNav())
     }
@@ -939,6 +1033,9 @@
       if (!active) return
       reportNavbar()
       reportMenu()
+      reportAuth()
+      // Modals that don't change the address change the modal flag too.
+      reportNav()
     })
   }
 
@@ -962,6 +1059,7 @@
     reportNav()
     reportNavbar()
     reportMenu()
+    reportAuth()
     new MutationObserver(onMutation).observe(document.body || document.documentElement, {
       childList: true,
       subtree: true,
