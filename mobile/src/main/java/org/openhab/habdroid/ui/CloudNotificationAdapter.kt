@@ -323,11 +323,7 @@ class CloudNotificationAdapter(
             }
         }
 
-        private fun showImageDialog(
-            context: Context,
-            notification: CloudMessage.CloudNotification,
-            bitmap: Bitmap
-        ) {
+        private fun showImageDialog(context: Context, notification: CloudMessage.CloudNotification, bitmap: Bitmap) {
             val dialog = Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
             val dialogBinding = DialogNotificationImageBinding.inflate(LayoutInflater.from(context))
             dialogBinding.photoView.setImageBitmap(bitmap)
