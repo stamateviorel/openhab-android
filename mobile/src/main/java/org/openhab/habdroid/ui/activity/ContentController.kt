@@ -111,6 +111,7 @@ abstract class ContentController protected constructor(private val activity: Mai
         is FrontailWebViewFragment -> WebViewUi.FRONTAIL
         else -> null
     }
+    val isTemporaryPageShowing get() = temporaryPage != null
     private var currentSitemap: Sitemap? = null
     protected var sitemapFragment: WidgetListFragment? = null
     protected val pageStack = Stack<Pair<LinkedPage, WidgetListFragment>>()
@@ -260,6 +261,10 @@ abstract class ContentController protected constructor(private val activity: Mai
     fun openSitemap(sitemap: Sitemap) {
         CrashReportingHelper.d(TAG, "openSitemap()", remoteOnly = true)
         Log.d(TAG, "Opening sitemap $sitemap (current: $currentSitemap)")
+        if (temporaryPage is CloudNotificationListFragment) {
+            currentSitemap = sitemap
+            return
+        }
         clearPreviousPageRecord()
         currentSitemap = sitemap
         // First clear the old fragment stack to show the progress spinner...
