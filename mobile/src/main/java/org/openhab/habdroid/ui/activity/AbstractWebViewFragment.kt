@@ -95,6 +95,8 @@ abstract class AbstractWebViewFragment :
         protected set
     var wantsActionBar = true
         private set
+    val currentSubpage: String?
+        get() = webView?.url?.toHttpUrlOrNull()?.toRelativeUrl()
 
     private val permissionRequester = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()

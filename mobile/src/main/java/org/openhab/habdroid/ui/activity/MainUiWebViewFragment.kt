@@ -103,10 +103,15 @@ class MainUiWebViewFragment :
         defaultTitle = title
     }
 
+    val currentNavState: String? get() = navState?.let { MainUiBridgeProtocol.buildNavState(it) }
+    val currentNavStateServerId: Int get() = navStateServerId
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) {
             pendingCommand = arguments?.getString(KEY_BRIDGE_COMMAND)
+            navStateServerId = arguments?.getInt(KEY_NAV_STATE_SERVER_ID, -1) ?: -1
+            navState = arguments?.getString(KEY_NAV_STATE)?.let { MainUiBridgeProtocol.parseNavState(it) }
         } else {
             navStateServerId = savedInstanceState.getInt(KEY_NAV_STATE_SERVER_ID, -1)
             navState = savedInstanceState.getString(KEY_NAV_STATE)?.let { MainUiBridgeProtocol.parseNavState(it) }
@@ -381,8 +386,8 @@ class MainUiWebViewFragment :
     companion object {
         private val TAG = MainUiWebViewFragment::class.java.simpleName
 
-        private const val KEY_NAV_STATE = "nav_state"
-        private const val KEY_NAV_STATE_SERVER_ID = "nav_state_server_id"
+        const val KEY_NAV_STATE = "nav_state"
+        const val KEY_NAV_STATE_SERVER_ID = "nav_state_server_id"
         const val KEY_BRIDGE_COMMAND = "bridge_command"
     }
 }
