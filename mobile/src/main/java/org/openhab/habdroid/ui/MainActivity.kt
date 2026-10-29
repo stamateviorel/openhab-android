@@ -851,7 +851,7 @@ class MainActivity : AbstractBaseActivity() {
                         .firstOrNull { ui -> result.props.hasWebViewUiInstalled(ui) }
                     when {
                         restoreContentState() -> {
-                            updateSitemapDrawerEntries()
+                            drawerController.updateSitemapEntries()
                         }
 
                         result.props.sitemaps.isNotEmpty() -> {
