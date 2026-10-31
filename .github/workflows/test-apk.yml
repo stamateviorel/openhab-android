@@ -3,7 +3,7 @@ name: Test APK
 on:
   push:
     branches:
-      - test-apk-8
+      - test-apk-9
   workflow_dispatch:
 
 permissions:
