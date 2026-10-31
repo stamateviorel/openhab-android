@@ -774,6 +774,9 @@ class MainActivity : AbstractBaseActivity() {
             Snackbar.LENGTH_LONG,
             R.string.undo
         ) {
+            if (pendingAction === defaultWebUi) {
+                pendingAction = null
+            }
             prefs.edit {
                 putActiveServerId(prevActiveServer)
             }
