@@ -23,7 +23,6 @@ import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import org.openhab.habdroid.util.PrefKeys
-import org.openhab.habdroid.util.getActiveServerId
 import org.openhab.habdroid.util.getPrefs
 
 /**
@@ -54,8 +53,7 @@ class WebViewManager(private val appContext: Application) {
     /**
      * Must be called before the WebView is used for anything else.
      */
-    fun setUpForActiveServer(webView: WebView) {
-        val serverId = appContext.getPrefs().getActiveServerId()
+    fun setUpForServer(webView: WebView, serverId: Int) {
         if (hasProfileSupport) {
             WebViewCompat.setProfile(webView, buildProfileName(serverId))
         }

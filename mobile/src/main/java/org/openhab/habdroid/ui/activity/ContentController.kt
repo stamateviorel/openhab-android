@@ -53,6 +53,7 @@ import org.openhab.habdroid.ui.CloudNotificationListFragment
 import org.openhab.habdroid.ui.MainActivity
 import org.openhab.habdroid.ui.WidgetListFragment
 import org.openhab.habdroid.ui.activity.AbstractWebViewFragment.Companion.KEY_IS_STACK_ROOT
+import org.openhab.habdroid.ui.activity.AbstractWebViewFragment.Companion.KEY_SERVER_ID
 import org.openhab.habdroid.ui.activity.AbstractWebViewFragment.Companion.KEY_SUBPAGE
 import org.openhab.habdroid.ui.preference.PreferencesActivity
 import org.openhab.habdroid.util.CrashReportingHelper
@@ -60,6 +61,7 @@ import org.openhab.habdroid.util.HttpClient
 import org.openhab.habdroid.util.PrefKeys
 import org.openhab.habdroid.util.buildBaseSourceId
 import org.openhab.habdroid.util.buildSitemapSourceId
+import org.openhab.habdroid.util.getActiveServerId
 import org.openhab.habdroid.util.getConnectionFactory
 import org.openhab.habdroid.util.getHumanReadableErrorMessage
 import org.openhab.habdroid.util.getPrefs
@@ -385,6 +387,7 @@ abstract class ContentController protected constructor(private val activity: Mai
             putBoolean(KEY_IS_STACK_ROOT, isStackRoot)
             putString(KEY_SUBPAGE, subpage)
             putString(MainUiWebViewFragment.KEY_BRIDGE_COMMAND, bridgeCommand)
+            putInt(KEY_SERVER_ID, activity.getPrefs().getActiveServerId())
         }
         webViewFragment.setCallback(this)
         showTemporaryPage(webViewFragment)
@@ -706,6 +709,11 @@ abstract class ContentController protected constructor(private val activity: Mai
 
     private fun resetState() {
         webViewUiBelowNotifications = null
+        // A web UI of another server must not be reused, as its WebView is set up for that server
+        val webViewPage = temporaryPage as? AbstractWebViewFragment
+        if (webViewPage != null && webViewPage.serverId != activity.getPrefs().getActiveServerId()) {
+            temporaryPage = null
+        }
         currentSitemap = null
         sitemapFragment = null
         pageStack.clear()
