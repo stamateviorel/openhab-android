@@ -151,7 +151,7 @@ class MainUiWebViewFragment :
 
         val mainUiStartPage = context?.loadActiveServerConfig()?.mainUiStartPage
         // Pages are only put back when Main UI starts on its front page
-        if (!mainUiStartPage.isNullOrEmpty() && !(url == urlToLoad && canRestoreRoutes)) {
+        if (!mainUiStartPage.isNullOrEmpty() && url == urlToLoad && !canRestoreRoutes) {
             urlBuilder.encodedPath(mainUiStartPage)
         }
 
