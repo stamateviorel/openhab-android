@@ -381,6 +381,11 @@ abstract class AbstractWebViewFragment :
                 this@AbstractWebViewFragment.onPageStarted()
             }
 
+            override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                mainActivity?.updateBackPressedCallbackState()
+            }
+
             private fun handleError(url: Uri) {
                 if (url.path == pathForError) {
                     updateViewVisibility(true, null)
