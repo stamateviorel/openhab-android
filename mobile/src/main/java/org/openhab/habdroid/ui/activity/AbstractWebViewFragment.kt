@@ -95,6 +95,11 @@ abstract class AbstractWebViewFragment :
     var wantsActionBar = true
         private set
 
+    /**
+     * The server this web UI belongs to. Its WebView is set up for this server, so it must not load another one.
+     */
+    val serverId get() = requireArguments().getInt(KEY_SERVER_ID)
+
     private val permissionRequester = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
@@ -120,7 +125,7 @@ abstract class AbstractWebViewFragment :
         get() {
             val context = requireContext()
             val intent = Intent(context, MainActivity::class.java)
-                .putExtra(MainActivity.EXTRA_SERVER_ID, context.getPrefs().getActiveServerId())
+                .putExtra(MainActivity.EXTRA_SERVER_ID, serverId)
                 .setAction(shortcutAction)
 
             webView?.url?.toHttpUrlOrNull()?.let {
@@ -137,14 +142,13 @@ abstract class AbstractWebViewFragment :
     override fun onAttach(context: Context) {
         super.onAttach(context)
         val prefs = context.getPrefs()
-        val activeServerId = prefs.getActiveServerId()
         title = context.getString(titleRes)
         if (
             prefs.getConfiguredServerIds().size > 1 &&
             context.getConnectionFactory().currentActive?.conn?.connection !is DemoConnection
         ) {
-            val activeServerName = ServerConfiguration.load(prefs, context.getSecretPrefs(), activeServerId)?.name
-            title = getString(R.string.ui_on_server, title, activeServerName)
+            val serverName = ServerConfiguration.load(prefs, context.getSecretPrefs(), serverId)?.name
+            title = getString(R.string.ui_on_server, title, serverName)
         }
     }
 
@@ -171,7 +175,7 @@ abstract class AbstractWebViewFragment :
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        webView?.let { it.context.getWebViewManager().setUpForActiveServer(it) }
+        webView?.let { it.context.getWebViewManager().setUpForServer(it, serverId) }
         webView?.apply {
             // Make sure not to pass window insets into the WebView, we already handle them in the activity
             ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
@@ -331,6 +335,10 @@ abstract class AbstractWebViewFragment :
     fun canGoBack(): Boolean = webView?.canGoBack() == true
 
     private fun loadWebsite(urlToLoad: String = this.urlToLoad) {
+        if (serverId != requireContext().getPrefs().getActiveServerId()) {
+            // The active server changed, the controller replaces this fragment
+            return
+        }
         val conn = requireContext().getConnectionFactory().currentActive?.usableConnection
         if (conn == null) {
             updateViewVisibility(true, null)
@@ -485,6 +493,7 @@ abstract class AbstractWebViewFragment :
         private const val KEY_CURRENT_URL = "url"
         const val KEY_IS_STACK_ROOT = "is_stack_root"
         const val KEY_SUBPAGE = "subpage"
+        const val KEY_SERVER_ID = "server_id"
     }
 
     interface ParentCallback {
