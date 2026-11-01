@@ -14,9 +14,11 @@
 package org.openhab.habdroid.ui
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.graphics.Bitmap
 import android.text.format.DateUtils
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.view.isGone
@@ -54,10 +56,8 @@ class CloudNotificationAdapter(
     private var highlightedId: String? = null
     private var selectedTag: String? = null
 
-    // Attachments like item:CameraSnapshot are the same for many notifications, so load each one only once.
-    // They show the current state, so they are only kept in memory and not stored for the notification.
+    // Attachments like item:CameraSnapshot are the same for many notifications, so load each one only once
     private val sharedImageLoads = mutableMapOf<String, Deferred<Bitmap?>>()
-    private val loadedImages = mutableMapOf<String, Bitmap>()
 
     var currentTagFilter: String?
         get() = selectedTag
@@ -80,8 +80,8 @@ class CloudNotificationAdapter(
     fun clear() {
         allNotifications.clear()
         collapsedNotifications.clear()
+        sharedImageLoads.values.forEach { load -> load.cancel() }
         sharedImageLoads.clear()
-        loadedImages.clear()
         displayItems.clear()
         notifyDataSetChanged()
     }
@@ -157,22 +157,17 @@ class CloudNotificationAdapter(
         notifyDataSetChanged()
     }
 
-    private fun getLoadedImage(notification: CloudMessage.CloudNotification): Bitmap? =
-        CacheManager.getInstance(context).getNotificationImageFromMemory(notification.id.persistedId)
-            ?: notification.mediaAttachmentUrl?.let { url -> loadedImages[url] }
-
     private suspend fun loadImage(notification: CloudMessage.CloudNotification, conn: Connection, size: Int): Bitmap? {
         val url = notification.mediaAttachmentUrl ?: return null
+        CacheManager.getInstance(context).getAttachmentImageFromMemory(url)?.let { return it }
         val load = sharedImageLoads.getOrPut(url) {
             scope.async(Dispatchers.IO) { notification.loadImage(conn, context, size) }
         }
         val bitmap = load.await()
-        if (bitmap != null) {
-            loadedImages[url] = bitmap
-        } else if (sharedImageLoads[url] === load) {
-            // Try again when the card is bound the next time
+        if (sharedImageLoads[url] === load) {
             sharedImageLoads.remove(url)
         }
+        bitmap?.let { CacheManager.getInstance(context).putAttachmentImageInMemory(url, it) }
         return bitmap
     }
 
@@ -192,7 +187,6 @@ class CloudNotificationAdapter(
             NotificationlistItemBinding.inflate(inflater, parent, false),
             usePrimaryServer,
             scope,
-            ::getLoadedImage,
             ::loadImage
         )
     }
@@ -232,7 +226,6 @@ class CloudNotificationAdapter(
         private val binding: NotificationlistItemBinding,
         private val usePrimaryServer: Boolean,
         private val scope: CoroutineScope,
-        private val loadedImage: (CloudMessage.CloudNotification) -> Bitmap?,
         private val imageLoader: suspend (CloudMessage.CloudNotification, Connection, Int) -> Bitmap?
     ) : RecyclerView.ViewHolder(binding.root) {
         private var imageLoadJob: Job? = null
@@ -299,7 +292,7 @@ class CloudNotificationAdapter(
             } else {
                 val cacheManager = CacheManager.getInstance(ctx)
                 val persistedId = notification.id.persistedId
-                val cachedBitmap = loadedImage(notification)
+                val cachedBitmap = cacheManager.getNotificationImageFromMemory(persistedId)
                 if (cachedBitmap != null) {
                     showImage(notification, cachedBitmap)
                 } else {
@@ -336,9 +329,10 @@ class CloudNotificationAdapter(
                 }
             }
 
-            if (notification.onClickAction != null) {
+            val onClickAction = notification.onClickAction
+            if (onClickAction != null && onClickAction.action !is CloudNotificationAction.Action.NoAction) {
                 binding.notificationCard.setOnClickListener {
-                    executeAction(ctx, notification, notification.onClickAction)
+                    executeAction(ctx, notification, onClickAction)
                 }
             } else {
                 binding.notificationCard.setOnClickListener(null)
@@ -363,15 +357,20 @@ class CloudNotificationAdapter(
             val intent = NotificationHandlingReceiver.createActivityIntent(context, notification.id, cna)
             val action = cna.action
             when {
-                intent != null -> context.startActivity(intent)
+                intent != null -> try {
+                    context.startActivity(intent)
+                } catch (e: ActivityNotFoundException) {
+                    Log.d(TAG, "Unable to open $intent", e)
+                }
 
                 action is CloudNotificationAction.Action.ItemCommandAction ->
-                    context.getBackgroundTasksManager().enqueueNotificationAction(action)
+                    context.getBackgroundTasksManager().enqueueNotificationAction(action, usePrimaryServer)
             }
         }
     }
 
     companion object {
+        private val TAG = CloudNotificationAdapter::class.java.simpleName
         private const val VIEW_TYPE_NOTIFICATION = 0
         private const val VIEW_TYPE_HEADER = 1
     }
