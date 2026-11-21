@@ -273,7 +273,7 @@ class MainActivity : AbstractBaseActivity() {
                 val c = getConnectionFactory().currentActive?.conn?.connection
                 if (c != null && c.hashCode() == lastConnectionHash) {
                     connection = c
-                    connectionServerId = prefs.getActiveServerId()
+                    connectionServerId = serverIdOf(c, getConnectionFactory().currentActive?.serverId)
                 }
             }
 
@@ -343,7 +343,7 @@ class MainActivity : AbstractBaseActivity() {
                 getConnectionFactory().activeFlow.collectLatest { info ->
                     if (info.conn != lastActiveConnectionResult) {
                         lastActiveConnectionResult = info.conn
-                        info.conn?.let { onActiveConnectionChanged(it, info.hasLocal) }
+                        info.conn?.let { onActiveConnectionChanged(it, info.serverId, info.hasLocal) }
                     }
                     if (info.cloud != lastActiveCloudConnectionResult) {
                         lastActiveCloudConnectionResult = info.cloud
@@ -586,7 +586,11 @@ class MainActivity : AbstractBaseActivity() {
         }
     }
 
-    private fun onActiveConnectionChanged(result: ConnectionFactory.ConnectionResult, hasLocal: Boolean) {
+    private fun onActiveConnectionChanged(
+        result: ConnectionFactory.ConnectionResult,
+        serverId: Int?,
+        hasLocal: Boolean
+    ) {
         CrashReportingHelper.d(TAG, "onActiveConnectionChanged($result)")
         val newConnection = result.connection
         val failureReason = result.failureReason
@@ -610,7 +614,7 @@ class MainActivity : AbstractBaseActivity() {
         }
 
         connection = newConnection
-        connectionServerId = if (newConnection != null) prefs.getActiveServerId() else null
+        connectionServerId = serverIdOf(newConnection, serverId)
         hideSnackbar(SNACKBAR_TAG_CONNECTION_ESTABLISHED)
         hideSnackbar(SNACKBAR_TAG_SSE_ERROR)
         hideSnackbar(SNACKBAR_TAG_DEMO_MODE_ACTIVE)
@@ -625,7 +629,11 @@ class MainActivity : AbstractBaseActivity() {
             }
 
             failureReason is WrongWifiException -> {
-                val activeConfig = ServerConfiguration.load(prefs, getSecretPrefs(), prefs.getActiveServerId())
+                val activeConfig = ServerConfiguration.load(
+                    prefs,
+                    getSecretPrefs(),
+                    serverId ?: prefs.getActiveServerId()
+                )
                 val ssids = activeConfig?.wifiSsids?.joinToString(", ")
                 controller.indicateWrongWifi(getString(R.string.error_wifi_restricted, activeConfig?.name, ssids))
             }
@@ -885,8 +893,11 @@ class MainActivity : AbstractBaseActivity() {
                         fallbackUi != null -> {
                             Log.d(TAG, "openHAB returned empty Sitemap list, fall back to web UI")
                             if (pendingAction == null) {
-                                pendingAction =
-                                    PendingAction.OpenWebViewUi(fallbackUi, prefs.getActiveServerId(), null)
+                                pendingAction = PendingAction.OpenWebViewUi(
+                                    fallbackUi,
+                                    connectionServerId ?: prefs.getActiveServerId(),
+                                    null
+                                )
                             }
                         }
 
@@ -927,6 +938,15 @@ class MainActivity : AbstractBaseActivity() {
         }
     }
 
+    private fun serverIdOf(conn: Connection?, serverId: Int?) = when (conn) {
+        null -> null
+
+        // The demo server isn't a configured server, so it serves whichever server is active
+        is DemoConnection -> prefs.getActiveServerId()
+
+        else -> serverId
+    }
+
     /**
      * Shows the content that was shown before the connection changed, e.g. from local to remote.
      *
@@ -936,7 +956,7 @@ class MainActivity : AbstractBaseActivity() {
         val state = contentStateToRestore ?: return false
         contentStateToRestore = null
         val props = serverProperties
-        if (state.serverId != prefs.getActiveServerId() || connection is DemoConnection || props == null) {
+        if (state.serverId != connectionServerId || connection is DemoConnection || props == null) {
             return false
         }
         Log.d(TAG, "Restoring content state $state")
@@ -1370,7 +1390,7 @@ class MainActivity : AbstractBaseActivity() {
         }
 
         action is PendingAction.OpenWebViewUi &&
-            action.serverId == prefs.getActiveServerId() &&
+            action.serverId == connectionServerId &&
             serverProperties?.hasWebViewUiInstalled(action.ui) == false -> {
             // Drop the action, otherwise it would switch back to this server once another server has this UI
             true
