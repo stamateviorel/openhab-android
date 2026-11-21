@@ -67,7 +67,6 @@ import org.openhab.habdroid.ui.ConnectionWebViewClient
 import org.openhab.habdroid.ui.MainActivity
 import org.openhab.habdroid.ui.WebViewManager
 import org.openhab.habdroid.ui.setUpForConnection
-import org.openhab.habdroid.util.getActiveServerId
 import org.openhab.habdroid.util.getConfiguredServerIds
 import org.openhab.habdroid.util.getConnectionFactory
 import org.openhab.habdroid.util.getPrefs
@@ -97,6 +96,11 @@ abstract class AbstractWebViewFragment :
         get() = webView?.url?.toHttpUrlOrNull()?.toRelativeUrl()
     private var loadedServerId: Int? = null
 
+    /**
+     * The server this web UI belongs to. Its WebView is set up for this server, so it must not load another one.
+     */
+    val serverId get() = requireArguments().getInt(KEY_SERVER_ID)
+
     private val permissionRequester = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
@@ -122,7 +126,7 @@ abstract class AbstractWebViewFragment :
         get() {
             val context = requireContext()
             val intent = Intent(context, MainActivity::class.java)
-                .putExtra(MainActivity.EXTRA_SERVER_ID, context.getPrefs().getActiveServerId())
+                .putExtra(MainActivity.EXTRA_SERVER_ID, serverId)
                 .setAction(shortcutAction)
 
             webView?.url?.toHttpUrlOrNull()?.let {
@@ -139,14 +143,13 @@ abstract class AbstractWebViewFragment :
     override fun onAttach(context: Context) {
         super.onAttach(context)
         val prefs = context.getPrefs()
-        val activeServerId = prefs.getActiveServerId()
         title = context.getString(titleRes)
         if (
             prefs.getConfiguredServerIds().size > 1 &&
             context.getConnectionFactory().currentActive?.conn?.connection !is DemoConnection
         ) {
-            val activeServerName = ServerConfiguration.load(prefs, context.getSecretPrefs(), activeServerId)?.name
-            title = getString(R.string.ui_on_server, title, activeServerName)
+            val serverName = ServerConfiguration.load(prefs, context.getSecretPrefs(), serverId)?.name
+            title = getString(R.string.ui_on_server, title, serverName)
         }
     }
 
@@ -159,7 +162,7 @@ abstract class AbstractWebViewFragment :
                     val newConnection = info.conn?.connection
                     if (newConnection != null && newConnection != usedConnection) {
                         // Stay on the current page if only the connection to the same server changed
-                        val sameServer = loadedServerId == requireContext().getPrefs().getActiveServerId()
+                        val sameServer = loadedServerId == info.serverId
                         loadWebsite(currentSubpage.takeIf { sameServer } ?: urlToLoad)
                     }
                 }
@@ -175,7 +178,7 @@ abstract class AbstractWebViewFragment :
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        webView?.let { it.context.getWebViewManager().setUpForActiveServer(it) }
+        webView?.let { it.context.getWebViewManager().setUpForServer(it, serverId) }
         webView?.apply {
             // Make sure not to pass window insets into the WebView, we already handle them in the activity
             ViewCompat.setOnApplyWindowInsetsListener(this) { v, insets ->
@@ -333,7 +336,12 @@ abstract class AbstractWebViewFragment :
     fun canGoBack(): Boolean = webView?.canGoBack() == true
 
     private fun loadWebsite(urlToLoad: String = this.urlToLoad) {
-        val conn = requireContext().getConnectionFactory().currentActive?.usableConnection
+        val active = requireContext().getConnectionFactory().currentActive
+        if (active?.serverId != null && active.serverId != serverId) {
+            // The connection is for another server, the controller replaces this fragment
+            return
+        }
+        val conn = active?.usableConnection
         if (conn == null) {
             updateViewVisibility(true, null)
             return
@@ -344,7 +352,7 @@ abstract class AbstractWebViewFragment :
         val url = buildUrl(conn, urlToLoad)
 
         Log.d(TAG, "Loading web page $url")
-        loadedServerId = requireContext().getPrefs().getActiveServerId()
+        loadedServerId = active.serverId
         webView.setUpForConnection(conn)
         webView.setBackgroundColor(Color.TRANSPARENT)
 
@@ -488,6 +496,7 @@ abstract class AbstractWebViewFragment :
         private const val KEY_CURRENT_URL = "url"
         const val KEY_IS_STACK_ROOT = "is_stack_root"
         const val KEY_SUBPAGE = "subpage"
+        const val KEY_SERVER_ID = "server_id"
     }
 
     interface ParentCallback {

@@ -174,6 +174,11 @@ class MainActivity : AbstractBaseActivity() {
         private set
     private var connectionServerId: Int? = null
 
+    /**
+     * The server the shown content belongs to: the one of the connection, or the active one while there's none
+     */
+    val shownServerId get() = connectionServerId ?: prefs.getActiveServerId()
+
     // Content state to restore once a new connection to the same server is established
     private var contentStateToRestore: ContentController.ContentState? = null
     private var lastActiveConnectionResult: ConnectionFactory.ConnectionResult? = null
